@@ -1,0 +1,126 @@
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { useSprintStore } from '../store/useSprintStore';
+import { Calendar, Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+export default function Dashboard() {
+    const { members, roles, sprints } = useSprintStore();
+    const navigate = useNavigate();
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                    <p className="text-muted-foreground">Overview of the current sprint and team status.</p>
+                </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Team Size</CardTitle>
+                        <div className="h-4 w-4 text-muted-foreground">👥</div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{members.length}</div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Roles</CardTitle>
+                        <div className="h-4 w-4 text-muted-foreground">🎭</div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{roles.length}</div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Active Sprint Assignments */}
+            {sprints.filter(s => s.status === 'active').length > 0 ? (
+                sprints.filter(s => s.status === 'active').map(activeSprint => (
+                    <Card key={activeSprint.id} className="border-primary/20 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <span>{activeSprint.name}</span>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => navigate(`/presentation?replay=${activeSprint.id}`)}
+                                        title="Replay Presentation"
+                                    >
+                                        <Play className="h-4 w-4 text-primary" />
+                                    </Button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                        Ends {new Date(activeSprint.end_date).toLocaleDateString()}
+                                    </span>
+                                    <Button size="sm" variant="outline" onClick={() => navigate('/planning')}>
+                                        Edit Plan
+                                    </Button>
+                                </div>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {roles.map(role => {
+                                    const memberId = activeSprint.assignments[role.id];
+                                    const member = members.find(m => m.id === memberId);
+
+                                    return (
+                                        <Card key={role.id} className="overflow-hidden border-2 hover:border-primary/50 transition-colors">
+                                            <div className={`h-2 w-full ${role.color.includes('bg-') ? role.color : 'bg-gray-500'}`} />
+                                            <CardContent className="p-4 flex items-center gap-4">
+                                                <div className="relative h-14 w-14 rounded-full overflow-hidden bg-secondary flex-shrink-0 border-2 border-background shadow-sm">
+                                                    {member?.avatar_url ? (
+                                                        <img src={member.avatar_url} alt={member.name} className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground font-bold text-xl">
+                                                            {(member?.name || '?').charAt(0)}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold text-lg leading-tight">{member?.name || 'Unassigned'}</h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`inline-block w-2 h-2 rounded-full ${role.color.includes('bg-') ? role.color : 'bg-gray-500'}`} />
+                                                        <p className="text-sm text-muted-foreground font-medium">{role.name}</p>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))
+            ) : (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Current Assignments</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-center py-12 text-muted-foreground flex flex-col items-center gap-4">
+                            <div className="p-4 rounded-full bg-secondary">
+                                <Calendar className="h-8 w-8 opacity-50" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg">No Active Sprint</h3>
+                                <p>Start a new rotation to see assignments here.</p>
+                            </div>
+                            <Button onClick={() => navigate('/presentation')}>
+                                Start Rotation
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
+}
