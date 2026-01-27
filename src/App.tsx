@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Squad from './pages/Squad';
@@ -19,7 +19,7 @@ function App() {
   }, [currentTeam, fetchInitialData]);
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         {/* Public Route */}
         <Route path="/presentation" element={
@@ -45,7 +45,7 @@ function App() {
           )
         } />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
 
