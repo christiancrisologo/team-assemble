@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { useSprintStore } from '../store/useSprintStore';
-import { Calendar, Play } from 'lucide-react';
+import { Calendar, Play, Users, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -42,6 +42,7 @@ export default function Dashboard() {
             {/* Active Sprint Assignments */}
             {sprints.filter(s => s.status === 'active').length > 0 ? (
                 sprints.filter(s => s.status === 'active').map(activeSprint => (
+                    // ... (existing active sprint card)
                     <Card key={activeSprint.id} className="border-primary/20 bg-primary/5">
                         <CardHeader>
                             <CardTitle className="flex justify-between items-center">
@@ -100,6 +101,47 @@ export default function Dashboard() {
                         </CardContent>
                     </Card>
                 ))
+            ) : members.length === 0 || roles.length === 0 ? (
+                <Card className="border-dashed">
+                    <CardHeader>
+                        <CardTitle>Setup Required</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-center py-12 space-y-6 max-w-md mx-auto">
+                            <div className="flex justify-center gap-4">
+                                <div className={`p-4 rounded-full ${members.length === 0 ? 'bg-secondary text-muted-foreground' : 'bg-primary/20 text-primary'}`}>
+                                    <Users className="h-8 w-8" />
+                                </div>
+                                <div className={`p-4 rounded-full ${roles.length === 0 ? 'bg-secondary text-muted-foreground' : 'bg-primary/20 text-primary'}`}>
+                                    <Shield className="h-8 w-8" />
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold">Ready to Rotate?</h3>
+                                <p className="text-muted-foreground mt-2">
+                                    You need at least one **Member** and one **Role** to start planning rotations.
+                                </p>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                {members.length === 0 && (
+                                    <Button variant="outline" onClick={() => navigate('/squad')} className="w-full">
+                                        Step 1. Add Squad Members 👥
+                                    </Button>
+                                )}
+                                {roles.length === 0 && (
+                                    <Button variant="outline" onClick={() => navigate('/roles')} className="w-full">
+                                        Step 2. Define Roles 🛡️
+                                    </Button>
+                                )}
+                                {members.length > 0 && roles.length > 0 && (
+                                    <Button variant="default" onClick={() => navigate('/planning')} className="w-full bg-green-600 hover:bg-green-700">
+                                        Step 3. Start Planning Sprints 🗓️
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             ) : (
                 <Card>
                     <CardHeader>
@@ -114,8 +156,8 @@ export default function Dashboard() {
                                 <h3 className="font-semibold text-lg">No Active Sprint</h3>
                                 <p>Start a new rotation to see assignments here.</p>
                             </div>
-                            <Button onClick={() => navigate('/presentation')}>
-                                Start Rotation
+                            <Button onClick={() => navigate('/planning')}>
+                                Go to Planner
                             </Button>
                         </div>
                     </CardContent>

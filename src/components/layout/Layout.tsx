@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { LayoutDashboard, Users, Settings, Shield, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
+import { OfflineBanner } from './OfflineBanner';
+import { Preloader } from '../ui/Preloader';
 
 interface LayoutProps {
     children: ReactNode;
@@ -64,6 +66,8 @@ export function Layout({ children }: LayoutProps) {
             </aside>
 
             {/* Main Content */}
+            <Preloader />
+            <OfflineBanner />
             <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-24 md:pb-8">
                 <div className="max-w-4xl mx-auto space-y-8">
                     {children}

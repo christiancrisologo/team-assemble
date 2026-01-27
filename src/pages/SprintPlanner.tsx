@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { addDays, format, parseISO } from 'date-fns';
-import { Save, Calendar, Pencil, Trash2 } from 'lucide-react';
+import { Save, Calendar, Pencil, Trash2, Users, Shield, Plus } from 'lucide-react';
 import { rotateSequential, rotateRandom } from '../utils/rotation';
 import type { Sprint } from '../types';
 
@@ -13,11 +13,42 @@ export default function SprintPlanner() {
     const [step, setStep] = useState(0); // 0 = List View, 1 = Config, 2 = Strategy, 3 = Review
     const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (editingSprint) {
-            updateSprint(editingSprint.id, editingSprint);
+            const exists = sprints.some(s => s.id === editingSprint.id);
+            if (exists) {
+                await updateSprint(editingSprint.id, editingSprint);
+            } else {
+                await addSprints([editingSprint]);
+            }
             setEditingSprint(null);
         }
+    };
+
+    const addSingleSprint = () => {
+        const lastSprint = sortedSprints[sortedSprints.length - 1];
+        const durationDays = Math.round(durationWeeks * 7);
+
+        let newStart = new Date();
+        if (lastSprint) {
+            newStart = addDays(new Date(lastSprint.end_date), 1);
+        }
+
+        const newEnd = addDays(newStart, durationDays);
+        const lastAssignments = lastSprint ? lastSprint.assignments : {};
+        const assignments = rotateSequential(members, roles, lastAssignments);
+
+        const newSprint: Sprint = {
+            id: crypto.randomUUID(),
+            name: `Sprint ${sprints.length + 1}`,
+            start_date: newStart.toISOString(),
+            end_date: newEnd.toISOString(),
+            status: 'planning',
+            assignments: assignments,
+            created_at: new Date().toISOString()
+        };
+
+        setEditingSprint(newSprint);
     };
 
     const handleDelete = (id: string) => {
@@ -155,7 +186,9 @@ export default function SprintPlanner() {
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl bg-white text-black border-2">
                                 <CardHeader>
-                                    <CardTitle>Edit Sprint</CardTitle>
+                                    <CardTitle>
+                                        {sprints.some(s => s.id === editingSprint.id) ? 'Edit Sprint' : 'Add Sprint'}
+                                    </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
@@ -182,6 +215,19 @@ export default function SprintPlanner() {
                                                 onChange={(e) => setEditingSprint({ ...editingSprint, end_date: new Date(e.target.value).toISOString() })}
                                             />
                                         </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Status</label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={editingSprint.status}
+                                            onChange={(e) => setEditingSprint({ ...editingSprint, status: e.target.value as any })}
+                                        >
+                                            <option value="planning">Planning</option>
+                                            <option value="active">Active</option>
+                                            <option value="completed">Completed</option>
+                                        </select>
                                     </div>
 
                                     <div className="space-y-3">
@@ -218,7 +264,34 @@ export default function SprintPlanner() {
                         </div>
                     )}
 
-                    {sortedSprints.length === 0 ? (
+                    {members.length === 0 || roles.length === 0 ? (
+                        <Card className="border-dashed bg-muted/5">
+                            <CardContent className="flex flex-col items-center justify-center p-12 space-y-6 text-center">
+                                <div className="flex gap-4">
+                                    <div className="p-4 rounded-full bg-background border shadow-sm">
+                                        <Users className={`h-8 w-8 ${members.length === 0 ? 'text-muted-foreground opacity-50' : 'text-primary'}`} />
+                                    </div>
+                                    <div className="p-4 rounded-full bg-background border shadow-sm">
+                                        <Shield className={`h-8 w-8 ${roles.length === 0 ? 'text-muted-foreground opacity-50' : 'text-primary'}`} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold">Rotation Planning Blocked</h3>
+                                    <p className="text-muted-foreground max-w-md mx-auto mt-3">
+                                        To generate a sprint plan and rotate roles, you first need to have **active members** and **defined roles**.
+                                    </p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-sm">
+                                    <Button variant={members.length === 0 ? "default" : "outline"} onClick={() => window.location.href = '/squad'}>
+                                        {members.length === 0 ? '1. Add Members' : 'Members Added ✅'}
+                                    </Button>
+                                    <Button variant={roles.length === 0 ? "default" : "outline"} onClick={() => window.location.href = '/roles'}>
+                                        {roles.length === 0 ? '2. Add Roles' : 'Roles Added ✅'}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ) : sortedSprints.length === 0 ? (
                         <Card className="bg-muted/10 border-dashed">
                             <CardContent className="flex flex-col items-center justify-center p-12 space-y-4 text-center">
                                 <div className="p-4 rounded-full bg-background border">
@@ -292,6 +365,11 @@ export default function SprintPlanner() {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+                                <div className="p-4 border-t border-dashed bg-muted/5 flex justify-center">
+                                    <Button variant="outline" onClick={addSingleSprint} className="w-full max-w-xs border-primary/20 hover:bg-primary/5 hover:text-primary transition-all">
+                                        <Plus className="mr-2 h-4 w-4" /> Add Single Sprint
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
