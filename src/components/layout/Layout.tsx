@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { LayoutDashboard, Users, Settings, Shield, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { capitalizeFirst } from '../../utils/string';
 import { Button } from '../ui/button';
 import { OfflineBanner } from './OfflineBanner';
 import { Preloader } from '../ui/Preloader';
@@ -25,7 +26,7 @@ export function Layout({ children }: LayoutProps) {
                         Team Assemble
                     </h1>
                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-                        {currentTeam?.name}
+                        {capitalizeFirst(currentTeam?.name)}
                     </span>
                 </div>
                 <Button variant="ghost" size="icon">
@@ -42,7 +43,7 @@ export function Layout({ children }: LayoutProps) {
                     <div className="flex w-full items-center justify-between mb-1">
                         {!isSidebarCollapsed && (
                             <div className="flex items-center space-x-2 overflow-hidden">
-                                <span className="font-bold text-xl truncate">Team Assembler</span>
+                                <span className="font-bold text-xl truncate">Team Assemble</span>
                             </div>
                         )}
                         <Button variant="ghost" size="icon" onClick={toggleSidebar} className={cn("h-8 w-8", isSidebarCollapsed ? "" : "ml-2")}>
@@ -52,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
                     {!isSidebarCollapsed && (
                         <div className="px-1 py-0.5 rounded bg-primary/10 border border-primary/20 max-w-full">
                             <p className="text-[10px] font-bold text-primary truncate uppercase tracking-tighter">
-                                Team: {currentTeam?.name}
+                                Team: {capitalizeFirst(currentTeam?.name)}
                             </p>
                         </div>
                     )}
@@ -72,7 +73,7 @@ export function Layout({ children }: LayoutProps) {
                     </div>
                     {!isSidebarCollapsed && (
                         <div className="text-xs text-muted-foreground text-center mt-4">
-                            Team Assembler v1.0
+                            Team Assemble v1.0
                         </div>
                     )}
                 </div>

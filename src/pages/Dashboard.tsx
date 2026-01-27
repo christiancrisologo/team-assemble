@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { useSprintStore } from '../store/useSprintStore';
+import { capitalizeFirst } from '../utils/string';
 import { Calendar, Play, Users, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,7 +14,7 @@ export default function Dashboard() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-4xl font-extrabold tracking-tight text-primary">
-                        {currentTeam?.name}
+                        {capitalizeFirst(currentTeam?.name)}
                     </h2>
                     <p className="text-muted-foreground font-medium flex items-center gap-2 mt-1">
                         Dashboard & Sprint Overview

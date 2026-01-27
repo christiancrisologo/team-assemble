@@ -11,6 +11,7 @@ import { DynamicIcon } from '../components/ui/IconPicker';
 import { supabase } from '../lib/supabase';
 import { Loader2 } from 'lucide-react';
 import type { Member, Role, Sprint, Team } from '../types';
+import { capitalizeFirst } from '../utils/string';
 
 export default function Presentation() {
     const { currentTeam: storeTeam, members: storeMembers, roles: storeRoles, sprints: storeSprints, startSprint } = useSprintStore();
@@ -283,7 +284,7 @@ export default function Presentation() {
         <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
             {step === 'finished' ? (
                 <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full max-w-5xl">
-                    <h2 className="text-4xl md:text-5xl font-bold mb-12">Team {team?.name}... assemble! 🚀</h2>
+                    <h2 className="text-4xl md:text-5xl font-bold mb-12">Team {capitalizeFirst(team?.name)}... assemble! 🚀</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {roles.map(role => {
                             const mId = newAssignments[role.id];
