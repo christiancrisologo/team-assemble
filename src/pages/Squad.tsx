@@ -26,7 +26,7 @@ export default function Squad() {
         setAvatarUrl('');
     };
 
-    const startEdit = (member: any) => {
+    const startEdit = (member: { id: string; name: string; avatar_url?: string }) => {
         setEditingId(member.id);
         setName(member.name);
         setAvatarUrl(member.avatar_url || '');

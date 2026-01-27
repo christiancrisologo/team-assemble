@@ -67,7 +67,7 @@ export default function Presentation() {
 
                 if (teamRes.error) throw new Error('Team not found');
 
-                const members = membersRes.data?.map((tm: any) => tm.lrn_members).filter(Boolean) || [];
+                const members = membersRes.data?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || [];
 
                 setPublicData({
                     team: teamRes.data,
@@ -75,9 +75,10 @@ export default function Presentation() {
                     roles: rolesRes.data || [],
                     sprint
                 });
-            } catch (err: any) {
-                console.error('Public fetch error:', err);
-                setPublicError(err.message || 'Failed to load presentation');
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                console.error('Public fetch error:', error);
+                setPublicError(error.message || 'Failed to load presentation');
             } finally {
                 setIsPublicLoading(false);
             }

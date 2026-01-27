@@ -222,7 +222,7 @@ export default function SprintPlanner() {
                                         <select
                                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                             value={editingSprint.status}
-                                            onChange={(e) => setEditingSprint({ ...editingSprint, status: e.target.value as any })}
+                                            onChange={(e) => setEditingSprint({ ...editingSprint, status: e.target.value as 'planning' | 'active' | 'completed' })}
                                         >
                                             <option value="planning">Planning</option>
                                             <option value="active">Active</option>

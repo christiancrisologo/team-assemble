@@ -77,7 +77,7 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
             get().setTeam(data);
             set({ isLoading: false });
             return { success: true };
-        } catch (err) {
+        } catch {
             set({ isLoading: false });
             return { success: false, error: 'An unexpected error occurred' };
         }
@@ -101,7 +101,7 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
             get().setTeam(data);
             set({ isLoading: false });
             return { success: true };
-        } catch (err) {
+        } catch {
             set({ isLoading: false });
             return { success: false, error: 'An unexpected error occurred' };
         }
@@ -149,12 +149,12 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
                 ] = fetchResults;
 
                 if (!tmErr && !rErr && !sErr) {
-                    const members = teamMembers?.map((tm: any) => tm.lrn_members).filter(Boolean) || [];
+                    const members = teamMembers?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || [];
                     const data = {
                         members,
                         roles: roles || [],
                         sprints: sprints || [],
-                        currentSprintId: sprints?.find((s: any) => s.status === 'active')?.id || null
+                        currentSprintId: sprints?.find((s: Sprint) => s.status === 'active')?.id || null
                     };
                     set({ ...data, isLoading: false, isUsingSampleData: false });
                     localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify(data));
