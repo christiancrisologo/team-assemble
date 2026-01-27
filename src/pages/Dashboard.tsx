@@ -55,41 +55,49 @@ export default function Dashboard() {
                     // ... (existing active sprint card)
                     <Card key={activeSprint.id} className="border-primary/20 bg-primary/5">
                         <CardHeader>
-                            <CardTitle className="flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <span>{activeSprint.name}</span>
-                                    <div className="flex items-center gap-1">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => navigate(`/presentation?replay=${activeSprint.id}`)}
-                                            title="Replay Presentation"
-                                        >
-                                            <Play className="h-4 w-4 text-primary" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => {
-                                                const url = `${window.location.origin}/team-assemble/presentation?replay=${activeSprint.id}`;
-                                                navigator.clipboard.writeText(url);
-                                                alert('Replay link copied to clipboard!');
-                                            }}
-                                            title="Share Presentation Link"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
-                                        </Button>
+                            <div className="space-y-3">
+                                <CardTitle className="flex justify-between items-center flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span>{activeSprint.name}</span>
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => navigate(`/presentation?replay=${activeSprint.id}`)}
+                                                title="Replay Presentation"
+                                            >
+                                                <Play className="h-4 w-4 text-primary" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => {
+                                                    const url = `${window.location.origin}/team-assemble/presentation?replay=${activeSprint.id}`;
+                                                    navigator.clipboard.writeText(url);
+                                                    alert('Replay link copied to clipboard!');
+                                                }}
+                                                title="Share Presentation Link"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-normal text-muted-foreground">
-                                        Ends {new Date(activeSprint.end_date).toLocaleDateString()}
-                                    </span>
                                     <Button size="sm" variant="outline" onClick={() => navigate('/planning')}>
                                         Edit Plan
                                     </Button>
+                                </CardTitle>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        <span>{new Date(activeSprint.start_date).toLocaleDateString()}</span>
+                                    </div>
+                                    <span>→</span>
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        <span>{new Date(activeSprint.end_date).toLocaleDateString()}</span>
+                                    </div>
                                 </div>
-                            </CardTitle>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

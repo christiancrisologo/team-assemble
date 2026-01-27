@@ -283,35 +283,51 @@ export default function Presentation() {
     return (
         <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
             {step === 'finished' ? (
-                <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full max-w-5xl">
+                <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full flex flex-col items-center justify-center">
                     <h2 className="text-4xl md:text-5xl font-bold mb-12">Team {capitalizeFirst(team?.name)}... assemble! 🚀</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                        {roles.map(role => {
+                    <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 max-w-6xl">
+                        {roles.map((role, index) => {
                             const mId = newAssignments[role.id];
                             const m = members.find(mem => mem.id === mId);
                             return (
-                                <Card key={role.id} className="border-primary/20 bg-primary/5 overflow-visible relative mt-4">
-                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-background p-2 rounded-full border shadow-sm">
-                                        <DynamicIcon name={role.icon || 'Shield'} className={`h-8 w-8 ${role.color?.replace('bg-', 'text-') || 'text-primary'}`} />
-                                    </div>
-                                    <CardContent className="pt-8 pb-4 px-4 flex flex-col items-center">
-                                        <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
-                                        {m ? (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20">
-                                                    {m.avatar_url ? (
-                                                        <img src={m.avatar_url} className="h-full w-full object-cover" />
-                                                    ) : (
-                                                        <div className="h-full w-full flex items-center justify-center font-bold text-xl text-muted-foreground">
-                                                            {m.name.charAt(0)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="font-semibold text-base md:text-lg truncate w-full text-center">{m.name}</div>
-                                            </div>
-                                        ) : <span className="text-muted-foreground">-</span>}
-                                    </CardContent>
-                                </Card>
+                                <motion.div
+                                    key={role.id}
+                                    initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                                    whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
+                                >
+                                    <Card className="border-primary/20 bg-primary/5 overflow-visible relative mt-4 hover:shadow-xl hover:border-primary/50 transition-all duration-300">
+                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-background p-2 rounded-full border shadow-sm">
+                                            <DynamicIcon name={role.icon || 'Shield'} className={`h-8 w-8 ${role.color?.replace('bg-', 'text-') || 'text-primary'}`} />
+                                        </div>
+                                        <CardContent className="pt-8 pb-4 px-4 flex flex-col items-center">
+                                            <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
+                                            {m ? (
+                                                <motion.div
+                                                    className="flex flex-col items-center gap-2"
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
+                                                >
+                                                    <motion.div
+                                                        className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20 ring-2 ring-primary/0 hover:ring-primary/50 transition-all"
+                                                        whileHover={{ ring: "8px", boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
+                                                    >
+                                                        {m.avatar_url ? (
+                                                            <img src={m.avatar_url} className="h-full w-full object-cover" />
+                                                        ) : (
+                                                            <div className="h-full w-full flex items-center justify-center font-bold text-xl text-muted-foreground">
+                                                                {m.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                    </motion.div>
+                                                    <div className="font-semibold text-base md:text-lg truncate w-full text-center">{m.name}</div>
+                                                </motion.div>
+                                            ) : <span className="text-muted-foreground">-</span>}
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
                             );
                         })}
                     </div>
@@ -325,7 +341,7 @@ export default function Presentation() {
                             <div className="space-y-4">
                                 <p className="text-muted-foreground">Inspired by this team? Create your own!</p>
                                 <Button onClick={() => navigate('/')} size="lg" className="min-w-[250px] bg-gradient-to-r from-primary to-purple-600 border-none">
-                                    Join Team Assemble now.
+                                    Join the Team Assemble now.
                                 </Button>
                             </div>
                         )}
@@ -335,38 +351,62 @@ export default function Presentation() {
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={currentRole.id}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 1.1 }}
+                        initial={{ opacity: 0, scale: 0.6, y: 50 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: -50 }}
                         transition={{ duration: 2, ease: "easeInOut" }}
-                        className="w-full max-w-md text-center"
+                        className="w-full max-w-2xl text-center flex flex-col items-center justify-center"
                     >
-                        <h3 className="text-4xl font-extrabold mb-8 text-primary">
+                        <h3 className="text-5xl md:text-6xl font-extrabold mb-12 text-primary">
                             {currentRole.name}
                         </h3>
 
-                        <div className="bg-card p-8 rounded-2xl border shadow-2xl mb-8 min-h-[250px] flex flex-col items-center justify-center relative overflow-hidden">
-                            <div className="absolute inset-0 opacity-5 flex items-center justify-center pointer-events-none">
+                        <motion.div
+                            className="bg-card p-12 rounded-3xl border-2 border-primary/30 shadow-2xl mb-8 w-full max-w-lg min-h-[350px] flex flex-col items-center justify-center relative overflow-hidden group hover:border-primary/60 transition-all"
+                            whileHover={{ boxShadow: "0 0 40px rgba(168, 85, 247, 0.3)" }}
+                        >
+                            <motion.div
+                                className="absolute inset-0 opacity-5 flex items-center justify-center pointer-events-none"
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                            >
                                 <DynamicIcon name={currentRole.icon || 'Shield'} className="h-48 w-48" />
-                            </div>
+                            </motion.div>
 
                             {assignedMember ? (
-                                <div className="z-10 flex flex-col items-center">
-                                    <div className="relative h-32 w-32 rounded-full overflow-hidden bg-secondary mb-6 border-4 border-primary shadow-lg">
+                                <motion.div
+                                    className="z-10 flex flex-col items-center gap-4"
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 1.5, ease: "easeOut" }}
+                                >
+                                    <motion.div
+                                        className="relative h-40 w-40 rounded-full overflow-hidden bg-secondary mb-2 border-4 border-primary shadow-2xl ring-4 ring-primary/20"
+                                        animate={{ y: [0, -10, 0] }}
+                                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                                        whileHover={{ scale: 1.1, boxShadow: "0 0 30px rgba(168, 85, 247, 0.6)" }}
+                                    >
                                         {assignedMember.avatar_url ? (
                                             <img src={assignedMember.avatar_url} className="h-full w-full object-cover" />
                                         ) : (
-                                            <div className="h-full w-full flex items-center justify-center font-bold text-4xl text-muted-foreground">
+                                            <div className="h-full w-full flex items-center justify-center font-bold text-5xl text-muted-foreground">
                                                 {assignedMember.name.charAt(0)}
                                             </div>
                                         )}
-                                    </div>
-                                    <div className="text-4xl font-bold tracking-tight">{assignedMember.name}</div>
-                                </div>
+                                    </motion.div>
+                                    <motion.div
+                                        className="text-5xl font-bold tracking-tight text-center"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 1, delay: 0.3 }}
+                                    >
+                                        {assignedMember.name}
+                                    </motion.div>
+                                </motion.div>
                             ) : (
-                                <div className="text-xl text-muted-foreground italic z-10">No assignment</div>
+                                <div className="text-2xl text-muted-foreground italic z-10">No assignment</div>
                             )}
-                        </div>
+                        </motion.div>
                     </motion.div>
                 </AnimatePresence>
             )}
