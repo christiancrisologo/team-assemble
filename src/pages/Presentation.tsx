@@ -312,7 +312,7 @@ export default function Presentation() {
                                                 >
                                                     <motion.div
                                                         className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20 ring-2 ring-primary/0 hover:ring-primary/50 transition-all"
-                                                        whileHover={{ ring: "8px", boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
+                                                        whileHover={{ boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
                                                     >
                                                         {m.avatar_url ? (
                                                             <img src={m.avatar_url} className="h-full w-full object-cover" />
