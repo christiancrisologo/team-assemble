@@ -11,7 +11,7 @@ import type { Sprint } from '../types';
 export default function SprintPlanner() {
     const { members, roles, sprints, addSprints, updateSprint, setSprints } = useSprintStore();
     const [step, setStep] = useState(0); // 0 = List View, 1 = Config, 2 = Strategy, 3 = Review
-    const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
+    const [editingSprint, setEditingSprint] = useState<Omit<Sprint, 'team_id'> | null>(null);
 
     const saveEdit = async () => {
         if (editingSprint) {
@@ -38,12 +38,12 @@ export default function SprintPlanner() {
         const lastAssignments = lastSprint ? lastSprint.assignments : {};
         const assignments = rotateSequential(members, roles, lastAssignments);
 
-        const newSprint: Sprint = {
+        const newSprint: Omit<Sprint, 'team_id'> = {
             id: crypto.randomUUID(),
             name: `Sprint ${sprints.length + 1}`,
             start_date: newStart.toISOString(),
             end_date: newEnd.toISOString(),
-            status: 'planning',
+            status: sprints.some(s => s.status === 'active') ? 'planning' : 'active',
             assignments: assignments,
             created_at: new Date().toISOString()
         };
@@ -111,11 +111,11 @@ export default function SprintPlanner() {
     const [strategy, setStrategy] = useState<'sequential' | 'random'>('sequential');
 
     // Step 3: Draft
-    const [draftSprints, setDraftSprints] = useState<Sprint[]>([]);
+    const [draftSprints, setDraftSprints] = useState<Omit<Sprint, 'team_id'>[]>([]);
 
     const generateDrafts = () => {
         let currentStart = new Date(startDate);
-        const newSprints: Sprint[] = [];
+        const newSprints: Omit<Sprint, 'team_id'>[] = [];
         const durationDays = Math.round(durationWeeks * 7);
 
         // For simulation, we need a baseline of assignments.
@@ -139,7 +139,7 @@ export default function SprintPlanner() {
                 name: `Sprint ${sprints.length + newSprints.length + 1}`,
                 start_date: startStr,
                 end_date: endStr,
-                status: 'planning',
+                status: (i === 0 && !sprints.some(s => s.status === 'active')) ? 'active' : 'planning',
                 assignments: assignments,
                 created_at: new Date().toISOString()
             });

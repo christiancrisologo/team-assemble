@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Member, Role, Sprint } from '../types';
+import type { Member, Role, Sprint, Team } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface SprintStore {
+    currentTeam: Team | null;
     members: Member[];
     roles: Role[];
     sprints: Sprint[];
@@ -12,38 +13,32 @@ interface SprintStore {
     isUsingSampleData: boolean;
 
     // Actions
+    setTeam: (team: Team | null) => void;
+    loginTeam: (name: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    createTeam: (name: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    logout: () => void;
+
     fetchInitialData: () => Promise<void>;
     addMember: (name: string, avatarUrl?: string) => Promise<void>;
     updateMember: (id: string, updates: Partial<Member>) => Promise<void>;
     removeMember: (id: string) => Promise<void>;
 
-    addRole: (role: Role) => Promise<void>;
+    addRole: (role: Omit<Role, 'team_id'>) => Promise<void>;
     updateRole: (id: string, updates: Partial<Role>) => Promise<void>;
     removeRole: (id: string) => Promise<void>;
 
-    addSprints: (sprints: Sprint[]) => Promise<void>;
+    addSprints: (sprints: Omit<Sprint, 'team_id'>[]) => Promise<void>;
     updateSprint: (id: string, updates: Partial<Sprint>) => Promise<void>;
-    startSprint: (sprint: Sprint) => Promise<void>;
+    startSprint: (sprint: Omit<Sprint, 'team_id'>) => Promise<void>;
     setCurrentSprint: (id: string) => void;
-    setSprints: (sprints: Sprint[]) => Promise<void>;
+    setSprints: (sprints: Omit<Sprint, 'team_id'>[]) => Promise<void>;
 }
 
-const SAMPLE_DATA = {
-    roles: [
-        { id: '1', name: 'Facilitator', color: 'bg-blue-500', description: 'Leads the meetings', icon: 'Shield' },
-        { id: '2', name: 'Scribe', color: 'bg-green-500', description: 'Takes notes', icon: 'PenTool' },
-        { id: '3', name: 'Timekeeper', color: 'bg-yellow-500', description: 'Tracks time', icon: 'Clock' },
-        { id: '4', name: 'Mood Maker', color: 'bg-pink-500', description: 'Keeps energy high', icon: 'Smile' },
-    ],
-    members: [
-        { id: 'm1', name: 'Test User 1', active: true, created_at: new Date().toISOString() },
-        { id: 'm2', name: 'Test User 2', active: true, created_at: new Date().toISOString() },
-    ]
-};
-
 const STORAGE_KEY = 'lrn_sprint_offline_data';
+const TEAM_KEY = 'lrn_sprint_team';
 
 export const useSprintStore = create<SprintStore>((set, get) => ({
+    currentTeam: JSON.parse(localStorage.getItem(TEAM_KEY) || 'null'),
     members: [],
     roles: [],
     sprints: [],
@@ -52,39 +47,117 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
     isOffline: !navigator.onLine,
     isUsingSampleData: false,
 
+    setTeam: (team) => {
+        set({ currentTeam: team });
+        if (team) {
+            localStorage.setItem(TEAM_KEY, JSON.stringify(team));
+            get().fetchInitialData();
+        } else {
+            localStorage.removeItem(TEAM_KEY);
+            set({ members: [], roles: [], sprints: [], currentSprintId: null });
+        }
+    },
+
+    loginTeam: async (name, password) => {
+        set({ isLoading: true });
+        const normalizedName = name.trim().toLowerCase();
+        try {
+            const { data, error } = await supabase
+                .from('lrn_teams')
+                .select('*')
+                .eq('name', normalizedName)
+                .eq('password', password)
+                .single();
+
+            if (error || !data) {
+                set({ isLoading: false });
+                return { success: false, error: 'Invalid team name or password' };
+            }
+
+            get().setTeam(data);
+            set({ isLoading: false });
+            return { success: true };
+        } catch (err) {
+            set({ isLoading: false });
+            return { success: false, error: 'An unexpected error occurred' };
+        }
+    },
+
+    createTeam: async (name, password) => {
+        set({ isLoading: true });
+        const normalizedName = name.trim().toLowerCase();
+        try {
+            const { data, error } = await supabase
+                .from('lrn_teams')
+                .insert([{ name: normalizedName, password }])
+                .select()
+                .single();
+
+            if (error) {
+                set({ isLoading: false });
+                return { success: false, error: error.message };
+            }
+
+            get().setTeam(data);
+            set({ isLoading: false });
+            return { success: true };
+        } catch (err) {
+            set({ isLoading: false });
+            return { success: false, error: 'An unexpected error occurred' };
+        }
+    },
+
+    logout: () => {
+        get().setTeam(null);
+    },
+
     fetchInitialData: async () => {
+        const { currentTeam } = get();
+        if (!currentTeam) return;
+
         set({ isLoading: true, isOffline: !navigator.onLine });
 
-        // Try Supabase first if online
         if (navigator.onLine) {
             try {
-                // Forced 2 second delay as requested by user
                 const delayPromise = new Promise(resolve => setTimeout(resolve, 2000));
 
                 const [fetchResults] = await Promise.all([
                     Promise.all([
-                        supabase.from('lrn_members').select('*').order('created_at', { ascending: true }),
-                        supabase.from('lrn_roles').select('*').order('created_at', { ascending: true }),
-                        supabase.from('lrn_sprints').select('*').order('start_date', { ascending: true })
+                        // Fetch members through join table
+                        supabase
+                            .from('lrn_team_members')
+                            .select('member_id, lrn_members(*)')
+                            .eq('team_id', currentTeam.id),
+                        supabase
+                            .from('lrn_roles')
+                            .select('*')
+                            .eq('team_id', currentTeam.id)
+                            .order('created_at', { ascending: true }),
+                        supabase
+                            .from('lrn_sprints')
+                            .select('*')
+                            .eq('team_id', currentTeam.id)
+                            .order('start_date', { ascending: true })
                     ]),
                     delayPromise
                 ]);
 
                 const [
-                    { data: members, error: mErr },
+                    { data: teamMembers, error: tmErr },
                     { data: roles, error: rErr },
                     { data: sprints, error: sErr }
                 ] = fetchResults;
 
-                if (!mErr && !rErr && !sErr) {
+                if (!tmErr && !rErr && !sErr) {
+                    const members = teamMembers?.map((tm: any) => tm.lrn_members).filter(Boolean) || [];
                     const data = {
-                        members: members || [],
+                        members,
                         roles: roles || [],
                         sprints: sprints || [],
-                        currentSprintId: sprints?.find(s => s.status === 'active')?.id || null
+                        currentSprintId: sprints?.find((s: any) => s.status === 'active')?.id || null
                     };
                     set({ ...data, isLoading: false, isUsingSampleData: false });
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify(data));
                     return;
                 }
             } catch (error) {
@@ -93,25 +166,26 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
         }
 
         // Offline or Supabase failed
-        const cached = localStorage.getItem(STORAGE_KEY);
+        const cached = localStorage.getItem(`${STORAGE_KEY}_${currentTeam.id}`);
         if (cached) {
             const parsed = JSON.parse(cached);
             set({ ...parsed, isLoading: false, isOffline: true, isUsingSampleData: false });
         } else {
-            // No cache? Load Sample
             set({
-                members: SAMPLE_DATA.members,
-                roles: SAMPLE_DATA.roles,
+                members: [],
+                roles: [],
                 sprints: [],
                 isLoading: false,
                 isOffline: true,
-                isUsingSampleData: true
+                isUsingSampleData: false
             });
         }
     },
 
     addMember: async (name, avatarUrl) => {
-        const { isOffline, members } = get();
+        const { isOffline, members, currentTeam } = get();
+        if (!currentTeam) return;
+
         const newMember = {
             id: crypto.randomUUID(),
             name,
@@ -121,17 +195,27 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
         };
 
         if (!isOffline) {
-            const { error } = await supabase.from('lrn_members').insert([newMember]);
-            if (error) console.error('Error adding member:', error);
+            // Transaction-like approach (Supabase doesn't support easy transactions without RPC)
+            const { error: mErr } = await supabase.from('lrn_members').insert([newMember]);
+            if (!mErr) {
+                await supabase.from('lrn_team_members').insert([{
+                    team_id: currentTeam.id,
+                    member_id: newMember.id
+                }]);
+            } else {
+                console.error('Error adding member:', mErr);
+            }
         }
 
         const updatedMembers = [...members, newMember];
         set({ members: updatedMembers });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), members: updatedMembers }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), members: updatedMembers }));
     },
 
     updateMember: async (id, updates) => {
-        const { isOffline, members } = get();
+        const { isOffline, members, currentTeam } = get();
+        if (!currentTeam) return;
+
         if (!isOffline) {
             const { error } = await supabase.from('lrn_members').update(updates).eq('id', id);
             if (error) console.error('Error updating member:', error);
@@ -139,35 +223,46 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
 
         const updatedMembers = members.map((m) => m.id === id ? { ...m, ...updates } : m);
         set({ members: updatedMembers });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), members: updatedMembers }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), members: updatedMembers }));
     },
 
     removeMember: async (id) => {
-        const { isOffline, members } = get();
+        const { isOffline, members, currentTeam } = get();
+        if (!currentTeam) return;
+
         if (!isOffline) {
+            // Delete from lrn_team_members first is handled by cascade if member is deleted, 
+            // but we might want to just remove them from the team.
+            // For now, let's delete the member globally (MVP approach).
             const { error } = await supabase.from('lrn_members').delete().eq('id', id);
             if (error) console.error('Error removing member:', error);
         }
 
         const updatedMembers = members.filter((m) => m.id !== id);
         set({ members: updatedMembers });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), members: updatedMembers }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), members: updatedMembers }));
     },
 
     addRole: async (role) => {
-        const { isOffline, roles } = get();
+        const { isOffline, roles, currentTeam } = get();
+        if (!currentTeam) return;
+
+        const roleWithTeam = { ...role, team_id: currentTeam.id };
+
         if (!isOffline) {
-            const { error } = await supabase.from('lrn_roles').insert([role]);
+            const { error } = await supabase.from('lrn_roles').insert([roleWithTeam]);
             if (error) console.error('Error adding role:', error);
         }
 
-        const updatedRoles = [...roles, role];
+        const updatedRoles = [...roles, roleWithTeam];
         set({ roles: updatedRoles });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), roles: updatedRoles }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), roles: updatedRoles }));
     },
 
     updateRole: async (id, updates) => {
-        const { isOffline, roles } = get();
+        const { isOffline, roles, currentTeam } = get();
+        if (!currentTeam) return;
+
         if (!isOffline) {
             const { error } = await supabase.from('lrn_roles').update(updates).eq('id', id);
             if (error) console.error('Error updating role:', error);
@@ -175,11 +270,13 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
 
         const updatedRoles = roles.map((r) => r.id === id ? { ...r, ...updates } : r);
         set({ roles: updatedRoles });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), roles: updatedRoles }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), roles: updatedRoles }));
     },
 
     removeRole: async (id) => {
-        const { isOffline, roles } = get();
+        const { isOffline, roles, currentTeam } = get();
+        if (!currentTeam) return;
+
         if (!isOffline) {
             const { error } = await supabase.from('lrn_roles').delete().eq('id', id);
             if (error) console.error('Error removing role:', error);
@@ -187,23 +284,29 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
 
         const updatedRoles = roles.filter((r) => r.id !== id);
         set({ roles: updatedRoles });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), roles: updatedRoles }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), roles: updatedRoles }));
     },
 
     addSprints: async (newSprints) => {
-        const { isOffline, sprints } = get();
+        const { isOffline, sprints, currentTeam } = get();
+        if (!currentTeam) return;
+
+        const sprintsWithTeam = newSprints.map(s => ({ ...s, team_id: currentTeam.id }));
+
         if (!isOffline) {
-            const { error } = await supabase.from('lrn_sprints').insert(newSprints);
+            const { error } = await supabase.from('lrn_sprints').insert(sprintsWithTeam);
             if (error) console.error('Error adding sprints:', error);
         }
 
-        const updatedSprints = [...sprints, ...newSprints];
+        const updatedSprints = [...sprints, ...sprintsWithTeam];
         set({ sprints: updatedSprints });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), sprints: updatedSprints }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: updatedSprints }));
     },
 
     updateSprint: async (id, updates) => {
-        const { isOffline, sprints } = get();
+        const { isOffline, sprints, currentTeam } = get();
+        if (!currentTeam) return;
+
         if (!isOffline) {
             const { error } = await supabase.from('lrn_sprints').update(updates).eq('id', id);
             if (error) console.error('Error updating sprint:', error);
@@ -211,35 +314,45 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
 
         const updatedSprints = sprints.map((s) => s.id === id ? { ...s, ...updates } : s);
         set({ sprints: updatedSprints });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), sprints: updatedSprints }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: updatedSprints }));
     },
 
     startSprint: async (sprint) => {
-        const { isOffline, sprints } = get();
+        const { isOffline, sprints, currentTeam } = get();
+        if (!currentTeam) return;
+
+        const sprintWithTeam = { ...sprint, team_id: currentTeam.id };
+
         if (!isOffline) {
-            const { error } = await supabase.from('lrn_sprints').insert([sprint]);
+            const { error } = await supabase.from('lrn_sprints').insert([sprintWithTeam]);
             if (error) console.error('Error starting sprint:', error);
         }
 
-        const updatedSprints = [...sprints, sprint];
+        const updatedSprints = [...sprints, sprintWithTeam];
         set({ sprints: updatedSprints, currentSprintId: sprint.id });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), sprints: updatedSprints, currentSprintId: sprint.id }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: updatedSprints, currentSprintId: sprint.id }));
     },
 
     setCurrentSprint: (id) => {
+        const { currentTeam } = get();
+        if (!currentTeam) return;
         set({ currentSprintId: id });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), currentSprintId: id }));
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), currentSprintId: id }));
     },
 
     setSprints: async (sprints) => {
-        const { isOffline } = get();
+        const { isOffline, currentTeam } = get();
+        if (!currentTeam) return;
+
+        const sprintsWithTeam = sprints.map(s => ({ ...s, team_id: currentTeam.id }));
+
         if (!isOffline) {
-            const { error } = await supabase.from('lrn_sprints').upsert(sprints);
+            const { error } = await supabase.from('lrn_sprints').upsert(sprintsWithTeam);
             if (error) console.error('Error setting sprints:', error);
         }
 
-        set({ sprints });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), sprints }));
+        set({ sprints: sprintsWithTeam });
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: sprintsWithTeam }));
     },
 }));
 

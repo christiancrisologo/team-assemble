@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSprintStore } from '../store/useSprintStore';
-import { useUIStore } from '../store/useUIStore'; // Added
+import { useUIStore } from '../store/useUIStore';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import confetti from 'canvas-confetti';
@@ -8,13 +8,26 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { rotateSequential, rotateRandom } from '../utils/rotation';
 import { DynamicIcon } from '../components/ui/IconPicker';
+import { supabase } from '../lib/supabase';
+import { Loader2 } from 'lucide-react';
+import type { Member, Role, Sprint, Team } from '../types';
 
 export default function Presentation() {
-    const { members, roles, sprints, startSprint } = useSprintStore();
-    const { setSidebarCollapsed } = useUIStore(); // Added
+    const { currentTeam: storeTeam, members: storeMembers, roles: storeRoles, sprints: storeSprints, startSprint } = useSprintStore();
+    const { setSidebarCollapsed } = useUIStore();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const replayId = searchParams.get('replay');
+
+    // Local state for public viewing
+    const [publicData, setPublicData] = useState<{
+        team: Team | null,
+        members: Member[],
+        roles: Role[],
+        sprint: Sprint | null
+    } | null>(null);
+    const [isPublicLoading, setIsPublicLoading] = useState(!!replayId && !storeTeam);
+    const [publicError, setPublicError] = useState<string | null>(null);
 
     // Sidebar collapse effect
     useEffect(() => {
@@ -22,17 +35,61 @@ export default function Presentation() {
         return () => setSidebarCollapsed(false);
     }, [setSidebarCollapsed]);
 
-    // Initial state based on replay
-    // If replayId exists, we want to start immediately. However, we need to find the sprint first.
-    // We can do this with a useEffect or lazy initialization.
-    // Let's use a ref to prevent double-init.
-    const hasInitialized = useRef(false);
+    // Data orchestration: use store if logged in, otherwise use publicData
+    const team = storeTeam || publicData?.team;
+    const members = storeTeam ? storeMembers : (publicData?.members || []);
+    const roles = storeTeam ? storeRoles : (publicData?.roles || []);
+    const sprints = storeTeam ? storeSprints : (publicData?.sprint ? [publicData.sprint] : []);
 
+    // Fetch public data if replaying without being logged in
+    useEffect(() => {
+        const fetchPublicData = async () => {
+            if (!replayId || storeTeam) return;
+
+            setIsPublicLoading(true);
+            try {
+                // 1. Fetch Sprint
+                const { data: sprint, error: sErr } = await supabase
+                    .from('lrn_sprints')
+                    .select('*')
+                    .eq('id', replayId)
+                    .single();
+
+                if (sErr || !sprint) throw new Error('Sprint not found');
+
+                // 2. Fetch Team, Roles, and Members in parallel
+                const [teamRes, rolesRes, membersRes] = await Promise.all([
+                    supabase.from('lrn_teams').select('*').eq('id', sprint.team_id).single(),
+                    supabase.from('lrn_roles').select('*').eq('team_id', sprint.team_id).order('created_at', { ascending: true }),
+                    supabase.from('lrn_team_members').select('member_id, lrn_members(*)').eq('team_id', sprint.team_id)
+                ]);
+
+                if (teamRes.error) throw new Error('Team not found');
+
+                const members = membersRes.data?.map((tm: any) => tm.lrn_members).filter(Boolean) || [];
+
+                setPublicData({
+                    team: teamRes.data,
+                    members,
+                    roles: rolesRes.data || [],
+                    sprint
+                });
+            } catch (err: any) {
+                console.error('Public fetch error:', err);
+                setPublicError(err.message || 'Failed to load presentation');
+            } finally {
+                setIsPublicLoading(false);
+            }
+        };
+
+        fetchPublicData();
+    }, [replayId, storeTeam]);
+
+    const hasInitialized = useRef(false);
     const [step, setStep] = useState<'intro' | 'manual_setup' | 'revealing' | 'finished'>('intro');
     const [currentRoleIndex, setCurrentRoleIndex] = useState(0);
     const [newAssignments, setNewAssignments] = useState<Record<string, string>>({});
 
-    // Confetti logic ...
     const fireConfetti = useCallback(() => {
         const duration = 3000;
         const end = Date.now() + duration;
@@ -67,11 +124,11 @@ export default function Presentation() {
             setStep('finished');
             fireConfetti();
 
-            // Only save if NOT replaying
-            if (!replayId) {
+            // Only save if NOT replaying and logged in
+            if (!replayId && storeTeam) {
                 const startDate = new Date();
                 const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + 17); // Approx 2.5 weeks
+                endDate.setDate(endDate.getDate() + 17);
 
                 startSprint({
                     id: crypto.randomUUID(),
@@ -84,7 +141,7 @@ export default function Presentation() {
                 });
             }
         }
-    }, [currentRoleIndex, roles, fireConfetti, replayId, sprints, startSprint, newAssignments]);
+    }, [currentRoleIndex, roles, fireConfetti, replayId, storeTeam, sprints, startSprint, newAssignments]);
 
     // Auto-play effect
     useEffect(() => {
@@ -97,7 +154,6 @@ export default function Presentation() {
         return () => clearTimeout(timer);
     }, [step, nextReveal]);
 
-    // Calculation/Start logic
     const handleStart = useCallback((strategy: 'random' | 'sequential' | 'manual' | 'replay') => {
         if (strategy === 'manual') {
             setStep('manual_setup');
@@ -114,7 +170,6 @@ export default function Presentation() {
             }
         }
 
-        // Standard generation logic
         const lastSprint = sprints[sprints.length - 1];
         const previousAssignments = lastSprint ? lastSprint.assignments : {};
 
@@ -130,8 +185,6 @@ export default function Presentation() {
         setCurrentRoleIndex(0);
     }, [members, roles, sprints, replayId]);
 
-
-    // Auto-start for Replay
     useEffect(() => {
         if (replayId && !hasInitialized.current && sprints.length > 0) {
             hasInitialized.current = true;
@@ -144,69 +197,55 @@ export default function Presentation() {
         setCurrentRoleIndex(0);
     };
 
+    if (isPublicLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-muted-foreground animate-pulse">Loading presentation...</p>
+            </div>
+        );
+    }
+
+    if (publicError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen space-y-6 text-center px-4">
+                <div className="h-16 w-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 text-2xl">⚠️</div>
+                <div className="space-y-2">
+                    <h2 className="text-2xl font-bold">Presentation Not Found</h2>
+                    <p className="text-muted-foreground max-w-md">{publicError}</p>
+                </div>
+                <Button onClick={() => navigate('/')}>Return to Home</Button>
+            </div>
+        );
+    }
+
     if (step === 'intro') {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 text-center">
+            <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-8 text-center p-4">
                 <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-pink-500">
-                    {replayId ? 'Replay Sprint Presentation' : 'Ready to Rotate?'}
+                    {replayId ? 'Sprint Presentation' : 'Ready to Rotate?'}
                 </h2>
 
-                {replayId ? (
-                    <div className="w-full max-w-md px-4">
-                        <Button
-                            size="lg"
-                            onClick={() => handleStart('replay')}
-                            className="h-24 text-lg w-full flex flex-col gap-2"
-                        >
-                            <span className="text-2xl">▶️</span>
-                            Start Presentation
-                        </Button>
-                        <Button variant="link" onClick={() => navigate('/')} className="mt-4">
-                            Cancel
-                        </Button>
-                    </div>
-                ) : (
-                    <>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl px-4">
-                            <Button
-                                size="lg"
-                                onClick={() => handleStart('sequential')}
-                                className="h-24 text-lg flex flex-col gap-2"
-                            >
-                                <span className="text-2xl">🔄</span>
-                                Sequential
-                            </Button>
-                            <Button
-                                size="lg"
-                                variant="secondary"
-                                onClick={() => handleStart('random')}
-                                className="h-24 text-lg flex flex-col gap-2"
-                            >
-                                <span className="text-2xl">🎲</span>
-                                Random
-                            </Button>
-                            <Button
-                                size="lg"
-                                variant="outline"
-                                onClick={() => handleStart('manual')}
-                                className="h-24 text-lg flex flex-col gap-2"
-                            >
-                                <span className="text-2xl">✍️</span>
-                                Manual
-                            </Button>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                            Make sure your squad is set up before starting!
-                        </p>
-                    </>
-                )}
+                <div className="w-full max-w-md">
+                    <Button
+                        size="lg"
+                        onClick={() => handleStart(replayId ? 'replay' : 'sequential')}
+                        className="h-24 text-lg w-full flex flex-col gap-2 shadow-xl hover:shadow-primary/20 transition-all"
+                    >
+                        <span className="text-2xl">▶️</span>
+                        Start Presentation
+                    </Button>
+                    <Button variant="link" onClick={() => navigate('/')} className="mt-4">
+                        Cancel
+                    </Button>
+                </div>
             </div>
         );
     }
 
     if (step === 'manual_setup') {
         return (
-            <div className="max-w-2xl mx-auto space-y-6">
+            <div className="max-w-2xl mx-auto space-y-6 p-4 pt-12">
                 <h2 className="text-3xl font-bold text-center">Manual Assignments</h2>
                 <div className="space-y-4">
                     {roles.map(role => (
@@ -235,28 +274,30 @@ export default function Presentation() {
     }
 
     const currentRole = roles[currentRoleIndex];
+    if (!currentRole) return null;
+
     const assignedMemberId = newAssignments[currentRole.id];
     const assignedMember = members.find(m => m.id === assignedMemberId);
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+        <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
             {step === 'finished' ? (
-                <div className="text-center space-y-6 animate-in zoom-in duration-1000">
-                    <h2 className="text-5xl font-bold mb-8">Squad Assembled! 🚀</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full max-w-5xl">
+                    <h2 className="text-4xl md:text-5xl font-bold mb-12">Team {team?.name}... assemble! 🚀</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {roles.map(role => {
                             const mId = newAssignments[role.id];
                             const m = members.find(mem => mem.id === mId);
                             return (
                                 <Card key={role.id} className="border-primary/20 bg-primary/5 overflow-visible relative mt-4">
                                     <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-background p-2 rounded-full border shadow-sm">
-                                        <DynamicIcon name={role.icon} className={`h-8 w-8 ${role.color.replace('bg-', 'text-')}`} />
+                                        <DynamicIcon name={role.icon || 'Shield'} className={`h-8 w-8 ${role.color?.replace('bg-', 'text-') || 'text-primary'}`} />
                                     </div>
                                     <CardContent className="pt-8 pb-4 px-4 flex flex-col items-center">
-                                        <div className="text-sm font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
+                                        <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
                                         {m ? (
                                             <div className="flex flex-col items-center gap-2">
-                                                <div className="h-16 w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20">
+                                                <div className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20">
                                                     {m.avatar_url ? (
                                                         <img src={m.avatar_url} className="h-full w-full object-cover" />
                                                     ) : (
@@ -265,7 +306,7 @@ export default function Presentation() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="font-semibold text-lg">{m.name}</div>
+                                                <div className="font-semibold text-base md:text-lg truncate w-full text-center">{m.name}</div>
                                             </div>
                                         ) : <span className="text-muted-foreground">-</span>}
                                     </CardContent>
@@ -273,9 +314,21 @@ export default function Presentation() {
                             );
                         })}
                     </div>
-                    <Button onClick={() => navigate('/')} size="lg" className="mt-8">
-                        Go to Dashboard
-                    </Button>
+
+                    <div className="flex flex-col items-center gap-4 pt-8">
+                        {storeTeam ? (
+                            <Button onClick={() => navigate('/')} size="lg" className="min-w-[200px]">
+                                Back to Dashboard
+                            </Button>
+                        ) : (
+                            <div className="space-y-4">
+                                <p className="text-muted-foreground">Inspired by this team? Create your own!</p>
+                                <Button onClick={() => navigate('/')} size="lg" className="min-w-[250px] bg-gradient-to-r from-primary to-purple-600 border-none">
+                                    Join Team Assemble now.
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : (
                 <AnimatePresence mode="wait">
@@ -292,9 +345,8 @@ export default function Presentation() {
                         </h3>
 
                         <div className="bg-card p-8 rounded-2xl border shadow-2xl mb-8 min-h-[250px] flex flex-col items-center justify-center relative overflow-hidden">
-                            {/* Role Icon Background Watermark */}
                             <div className="absolute inset-0 opacity-5 flex items-center justify-center pointer-events-none">
-                                <DynamicIcon name={currentRole.icon} className="h-48 w-48" />
+                                <DynamicIcon name={currentRole.icon || 'Shield'} className="h-48 w-48" />
                             </div>
 
                             {assignedMember ? (

@@ -5,15 +5,24 @@ import { Calendar, Play, Users, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
-    const { members, roles, sprints } = useSprintStore();
+    const { currentTeam, members, roles, sprints, logout } = useSprintStore();
     const navigate = useNavigate();
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-                    <p className="text-muted-foreground">Overview of the current sprint and team status.</p>
+                    <h2 className="text-4xl font-extrabold tracking-tight text-primary">
+                        {currentTeam?.name}
+                    </h2>
+                    <p className="text-muted-foreground font-medium flex items-center gap-2 mt-1">
+                        Dashboard & Sprint Overview
+                    </p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={() => logout()}>
+                        Switch Team
+                    </Button>
                 </div>
             </div>
 
@@ -48,14 +57,28 @@ export default function Dashboard() {
                             <CardTitle className="flex justify-between items-center">
                                 <div className="flex items-center gap-2">
                                     <span>{activeSprint.name}</span>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => navigate(`/presentation?replay=${activeSprint.id}`)}
-                                        title="Replay Presentation"
-                                    >
-                                        <Play className="h-4 w-4 text-primary" />
-                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => navigate(`/presentation?replay=${activeSprint.id}`)}
+                                            title="Replay Presentation"
+                                        >
+                                            <Play className="h-4 w-4 text-primary" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                const url = `${window.location.origin}/presentation?replay=${activeSprint.id}`;
+                                                navigator.clipboard.writeText(url);
+                                                alert('Replay link copied to clipboard!');
+                                            }}
+                                            title="Share Presentation Link"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-normal text-muted-foreground">
@@ -124,17 +147,17 @@ export default function Dashboard() {
                             </div>
                             <div className="flex flex-col gap-3">
                                 {members.length === 0 && (
-                                    <Button variant="outline" onClick={() => navigate('/squad')} className="w-full">
+                                    <Button variant="outline" onClick={() => navigate('/squad')} className="w-full justify-start px-8">
                                         Step 1. Add Squad Members 👥
                                     </Button>
                                 )}
                                 {roles.length === 0 && (
-                                    <Button variant="outline" onClick={() => navigate('/roles')} className="w-full">
+                                    <Button variant="outline" onClick={() => navigate('/roles')} className="w-full justify-start px-8">
                                         Step 2. Define Roles 🛡️
                                     </Button>
                                 )}
                                 {members.length > 0 && roles.length > 0 && (
-                                    <Button variant="default" onClick={() => navigate('/planning')} className="w-full bg-green-600 hover:bg-green-700">
+                                    <Button variant="default" onClick={() => navigate('/planning')} className="w-full bg-green-600 hover:bg-green-700 justify-start px-8">
                                         Step 3. Start Planning Sprints 🗓️
                                     </Button>
                                 )}
