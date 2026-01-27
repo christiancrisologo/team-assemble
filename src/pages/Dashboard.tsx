@@ -70,7 +70,7 @@ export default function Dashboard() {
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => {
-                                                const url = `${window.location.origin}/presentation?replay=${activeSprint.id}`;
+                                                const url = `${window.location.origin}/team-assemble/presentation?replay=${activeSprint.id}`;
                                                 navigator.clipboard.writeText(url);
                                                 alert('Replay link copied to clipboard!');
                                             }}
