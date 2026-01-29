@@ -3,7 +3,8 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
-import { ALL_ICONS, IconName } from './icons';
+import { ALL_ICONS } from './icons';
+import type { IconName } from './icons';
 
 interface IconPickerProps {
     selectedIcon?: string;

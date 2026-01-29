@@ -149,7 +149,7 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
                 ] = fetchResults;
 
                 if (!tmErr && !rErr && !sErr) {
-                    const members = teamMembers?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || [];
+                    const members = (teamMembers?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || []) as Member[];
                     const data = {
                         members,
                         roles: roles || [],

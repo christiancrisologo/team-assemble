@@ -67,7 +67,7 @@ export default function Presentation() {
 
                 if (teamRes.error) throw new Error('Team not found');
 
-                const members = membersRes.data?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || [];
+                const members = (membersRes.data?.map((tm: Record<string, unknown>) => tm.lrn_members).filter(Boolean) || []) as Member[];
 
                 setPublicData({
                     team: teamRes.data,
