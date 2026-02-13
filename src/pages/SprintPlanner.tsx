@@ -36,11 +36,22 @@ export default function SprintPlanner() {
 
         const newEnd = addDays(newStart, durationDays);
         const lastAssignments = lastSprint ? lastSprint.assignments : {};
+
+        // Always use sequential for 'Add Single Sprint' as requested, 
+        // or follow the currently selected strategy if that's preferred.
+        // Given the request "It should follow the sequential order...", I will force sequential here.
         const assignments = rotateSequential(members, roles, lastAssignments);
+
+        // Find max sprint number to avoid duplicates
+        const sprintNumbers = sprints.map(s => {
+            const match = s.name.match(/Sprint (\d+)/);
+            return match ? parseInt(match[1]) : 0;
+        });
+        const nextNumber = Math.max(0, ...sprintNumbers) + 1;
 
         const newSprint: Omit<Sprint, 'team_id'> = {
             id: crypto.randomUUID(),
-            name: `Sprint ${sprints.length + 1}`,
+            name: `Sprint ${nextNumber}`,
             start_date: newStart.toISOString(),
             end_date: newEnd.toISOString(),
             status: sprints.some(s => s.status === 'active') ? 'planning' : 'active',
@@ -122,6 +133,13 @@ export default function SprintPlanner() {
         // Use the last real sprint, or empty if none.
         let lastAssignments = sprints.length > 0 ? sprints[sprints.length - 1].assignments : {};
 
+        // Find base sprint number
+        const existingNumbers = sprints.map(s => {
+            const match = s.name.match(/Sprint (\d+)/);
+            return match ? parseInt(match[1]) : 0;
+        });
+        let nextNumber = Math.max(0, ...existingNumbers) + 1;
+
         for (let i = 0; i < sprintCount; i++) {
             const startStr = currentStart.toISOString();
             const end = addDays(currentStart, durationDays);
@@ -136,7 +154,7 @@ export default function SprintPlanner() {
 
             newSprints.push({
                 id: crypto.randomUUID(),
-                name: `Sprint ${sprints.length + newSprints.length + 1}`,
+                name: `Sprint ${nextNumber++}`,
                 start_date: startStr,
                 end_date: endStr,
                 status: (i === 0 && !sprints.some(s => s.status === 'active')) ? 'active' : 'planning',
@@ -147,9 +165,8 @@ export default function SprintPlanner() {
             // Update "lastAssignments" for next iteration
             lastAssignments = assignments;
 
-            // Advance date
+            // Advance date for next iteration
             currentStart = addDays(end, 1);
-            currentStart = end;
         }
 
         setDraftSprints(newSprints);

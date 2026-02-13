@@ -88,7 +88,7 @@ export default function Presentation() {
     }, [replayId, storeTeam]);
 
     const hasInitialized = useRef(false);
-    const [step, setStep] = useState<'intro' | 'manual_setup' | 'revealing' | 'finished'>('intro');
+    const [step, setStep] = useState<'loading' | 'revealing' | 'manual_setup' | 'finished'>('loading');
     const [currentRoleIndex, setCurrentRoleIndex] = useState(0);
     const [newAssignments, setNewAssignments] = useState<Record<string, string>>({});
 
@@ -188,9 +188,13 @@ export default function Presentation() {
     }, [members, roles, sprints, replayId]);
 
     useEffect(() => {
-        if (replayId && !hasInitialized.current && sprints.length > 0) {
+        if (!hasInitialized.current && sprints.length > 0) {
             hasInitialized.current = true;
-            handleStart('replay');
+            if (replayId) {
+                handleStart('replay');
+            } else {
+                handleStart('sequential');
+            }
         }
     }, [replayId, sprints, handleStart]);
 
@@ -199,11 +203,11 @@ export default function Presentation() {
         setCurrentRoleIndex(0);
     };
 
-    if (isPublicLoading) {
+    if (isPublicLoading || step === 'loading') {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="text-muted-foreground animate-pulse">Loading presentation...</p>
+                <p className="text-muted-foreground animate-pulse">Preparing presentation...</p>
             </div>
         );
     }
@@ -221,29 +225,7 @@ export default function Presentation() {
         );
     }
 
-    if (step === 'intro') {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-8 text-center p-4">
-                <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-pink-500">
-                    {replayId ? 'Sprint Presentation' : 'Ready to Rotate?'}
-                </h2>
 
-                <div className="w-full max-w-md">
-                    <Button
-                        size="lg"
-                        onClick={() => handleStart(replayId ? 'replay' : 'sequential')}
-                        className="h-24 text-lg w-full flex flex-col gap-2 shadow-xl hover:shadow-primary/20 transition-all"
-                    >
-                        <span className="text-2xl">▶️</span>
-                        Start Presentation
-                    </Button>
-                    <Button variant="link" onClick={() => navigate('/')} className="mt-4">
-                        Cancel
-                    </Button>
-                </div>
-            </div>
-        );
-    }
 
     if (step === 'manual_setup') {
         return (

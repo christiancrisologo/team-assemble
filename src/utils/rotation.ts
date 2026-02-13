@@ -46,15 +46,28 @@ export function rotateSequential(
 
     const sortedMembers = [...activeMembers].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Find who had the first role (role[0])
-    const firstRoleId = roles[0].id;
-    const lastMemberIdForFirstRole = previousAssignments[firstRoleId];
+    // Find who had a role last time to anchor the rotation
+    let lastMemberId: string | undefined = undefined;
+    let anchorRoleIndex = -1;
+
+    for (let i = 0; i < roles.length; i++) {
+        const mId = previousAssignments[roles[i].id];
+        if (mId) {
+            lastMemberId = mId;
+            anchorRoleIndex = i;
+            break;
+        }
+    }
 
     let shiftIndex = 0;
-    if (lastMemberIdForFirstRole) {
-        const lastIndex = sortedMembers.findIndex(m => m.id === lastMemberIdForFirstRole);
-        if (lastIndex !== -1) {
-            shiftIndex = (lastIndex + 1) % sortedMembers.length;
+    if (lastMemberId) {
+        const lastMemberIdxInSorted = sortedMembers.findIndex(m => m.id === lastMemberId);
+        if (lastMemberIdxInSorted !== -1) {
+            // New head for roles[0] should be (last_member_index - anchor_role_index + 1)
+            // Example: If anchorRoleIndex was 1 (second role) and lastMemberIdxInSorted was 5,
+            // Then roles[0] would have been member 4.
+            // So the next rotation's roles[0] should be member (4 + 1) = 5.
+            shiftIndex = (lastMemberIdxInSorted - anchorRoleIndex + 1 + sortedMembers.length) % sortedMembers.length;
         }
     }
 
