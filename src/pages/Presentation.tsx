@@ -12,6 +12,8 @@ import { supabase } from '../lib/supabase';
 import { Loader2 } from 'lucide-react';
 import type { Member, Role, Sprint, Team } from '../types';
 import { capitalizeFirst } from '../utils/string';
+import html2canvas from 'html2canvas';
+import { Share2, Download, Check, Copy } from 'lucide-react';
 
 export default function Presentation() {
     const { currentTeam: storeTeam, members: storeMembers, roles: storeRoles, sprints: storeSprints, startSprint } = useSprintStore();
@@ -91,6 +93,10 @@ export default function Presentation() {
     const [step, setStep] = useState<'loading' | 'revealing' | 'manual_setup' | 'finished'>('loading');
     const [currentRoleIndex, setCurrentRoleIndex] = useState(0);
     const [newAssignments, setNewAssignments] = useState<Record<string, string>>({});
+    const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+    const resultsRef = useRef<HTMLDivElement>(null);
 
     const fireConfetti = useCallback(() => {
         const duration = 3000;
@@ -203,6 +209,75 @@ export default function Presentation() {
         setCurrentRoleIndex(0);
     };
 
+    const handleCapture = async () => {
+        if (!resultsRef.current) return;
+        setIsCapturing(true);
+        try {
+            // Wait a bit for animations to settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const canvas = await html2canvas(resultsRef.current, {
+                useCORS: true,
+                scale: 2, // Better quality
+                backgroundColor: null, // Transparent if possible, but let's see
+                logging: false,
+            });
+
+            const url = canvas.toDataURL('image/png');
+            setScreenshotUrl(url);
+        } catch (error) {
+            console.error('Failed to capture screenshot:', error);
+        } finally {
+            setIsCapturing(false);
+        }
+    };
+
+    const handleDownload = () => {
+        if (!screenshotUrl) return;
+        const link = document.createElement('a');
+        link.download = `team-assemble-${team?.name || 'squad'}.png`;
+        link.href = screenshotUrl;
+        link.click();
+    };
+
+    const handleCopy = async () => {
+        if (!screenshotUrl) return;
+        try {
+            const response = await fetch(screenshotUrl);
+            const blob = await response.blob();
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+            ]);
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+        } catch (error) {
+            console.error('Failed to copy image:', error);
+        }
+    };
+
+    const handleShare = async () => {
+        if (!screenshotUrl) {
+            await handleCapture();
+        }
+
+        // Use Web Share API if available
+        if (navigator.share && screenshotUrl) {
+            try {
+                const response = await fetch(screenshotUrl);
+                const blob = await response.blob();
+                const file = new File([blob], 'team-assemble.png', { type: 'image/png' });
+
+                await navigator.share({
+                    title: 'Team Assemble Results',
+                    text: `Check out our new team rotation for ${team?.name}!`,
+                    files: [file],
+                });
+            } catch (error) {
+                console.error('Error sharing:', error);
+            }
+        }
+    };
+
     if (isPublicLoading || step === 'loading') {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
@@ -267,64 +342,98 @@ export default function Presentation() {
         <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
             {step === 'finished' ? (
                 <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full flex flex-col items-center justify-center">
-                    <h2 className="text-4xl md:text-5xl font-bold mb-12">Team {capitalizeFirst(team?.name)}... assemble! 🚀</h2>
-                    <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 max-w-6xl">
-                        {roles.map((role, index) => {
-                            const mId = newAssignments[role.id];
-                            const m = members.find(mem => mem.id === mId);
-                            return (
-                                <motion.div
-                                    key={role.id}
-                                    initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
-                                    whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
-                                >
-                                    <Card className="border-primary/20 bg-primary/5 overflow-visible relative mt-4 hover:shadow-xl hover:border-primary/50 transition-all duration-300">
-                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-background p-2 rounded-full border shadow-sm">
-                                            <DynamicIcon name={role.icon || 'Shield'} className={`h-8 w-8 ${role.color?.replace('bg-', 'text-') || 'text-primary'}`} />
-                                        </div>
-                                        <CardContent className="pt-8 pb-4 px-4 flex flex-col items-center">
-                                            <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
-                                            {m ? (
-                                                <motion.div
-                                                    className="flex flex-col items-center gap-2"
-                                                    initial={{ scale: 0 }}
-                                                    animate={{ scale: 1 }}
-                                                    transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
-                                                >
+                    <div ref={resultsRef} className="p-8 pb-12 w-full flex flex-col items-center justify-center bg-background rounded-3xl">
+                        <h2 className="text-4xl md:text-5xl font-bold mb-12 italic tracking-tighter">Team {capitalizeFirst(team?.name)}... <span className="text-primary uppercase">assemble!</span> 🚀</h2>
+                        <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 max-w-6xl">
+                            {roles.map((role, index) => {
+                                const mId = newAssignments[role.id];
+                                const m = members.find(mem => mem.id === mId);
+                                return (
+                                    <motion.div
+                                        key={role.id}
+                                        initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                                        whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
+                                    >
+                                        <Card className="border-primary/20 bg-primary/5 overflow-visible relative mt-4 hover:shadow-xl hover:border-primary/50 transition-all duration-300">
+                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-background p-2 rounded-full border shadow-sm">
+                                                <DynamicIcon name={role.icon || 'Shield'} className={`h-8 w-8 ${role.color?.replace('bg-', 'text-') || 'text-primary'}`} />
+                                            </div>
+                                            <CardContent className="pt-8 pb-4 px-4 flex flex-col items-center">
+                                                <div className="text-xs font-bold uppercase tracking-widest text-primary mb-3 mt-2">{role.name}</div>
+                                                {m ? (
                                                     <motion.div
-                                                        className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20 ring-2 ring-primary/0 hover:ring-primary/50 transition-all"
-                                                        whileHover={{ boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
+                                                        className="flex flex-col items-center gap-2"
+                                                        initial={{ scale: 0 }}
+                                                        animate={{ scale: 1 }}
+                                                        transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
                                                     >
-                                                        {m.avatar_url ? (
-                                                            <img src={m.avatar_url} className="h-full w-full object-cover" />
-                                                        ) : (
-                                                            <div className="h-full w-full flex items-center justify-center font-bold text-xl text-muted-foreground">
-                                                                {m.name.charAt(0)}
-                                                            </div>
-                                                        )}
+                                                        <motion.div
+                                                            className="h-14 w-14 md:h-16 md:w-16 rounded-full overflow-hidden bg-secondary border-2 border-primary/20 ring-2 ring-primary/0 hover:ring-primary/50 transition-all"
+                                                            whileHover={{ boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
+                                                        >
+                                                            {m.avatar_url ? (
+                                                                <img src={m.avatar_url} className="h-full w-full object-cover" />
+                                                            ) : (
+                                                                <div className="h-full w-full flex items-center justify-center font-bold text-xl text-muted-foreground">
+                                                                    {m.name.charAt(0)}
+                                                                </div>
+                                                            )}
+                                                        </motion.div>
+                                                        <div className="font-semibold text-base md:text-lg truncate w-full text-center">{m.name}</div>
                                                     </motion.div>
-                                                    <div className="font-semibold text-base md:text-lg truncate w-full text-center">{m.name}</div>
-                                                </motion.div>
-                                            ) : <span className="text-muted-foreground">-</span>}
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            );
-                        })}
+                                                ) : <span className="text-muted-foreground">-</span>}
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    <div className="flex flex-col items-center gap-4 pt-8">
+                    <div className="flex flex-col items-center gap-6 pt-12">
+                        <div className="flex flex-wrap justify-center gap-3">
+                            {!screenshotUrl ? (
+                                <Button
+                                    onClick={handleCapture}
+                                    size="lg"
+                                    variant="outline"
+                                    className="gap-2 border-primary/20 hover:bg-primary/5"
+                                    disabled={isCapturing}
+                                >
+                                    {isCapturing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                                    {isCapturing ? 'Generating Preview...' : 'Prepare to Share'}
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button onClick={handleDownload} size="lg" variant="outline" className="gap-2 border-primary/20">
+                                        <Download className="h-4 w-4" />
+                                        Download Image
+                                    </Button>
+                                    <Button onClick={handleCopy} size="lg" variant="outline" className="gap-2 border-primary/20 min-w-[140px]">
+                                        {copySuccess ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                        {copySuccess ? 'Copied!' : 'Copy Image'}
+                                    </Button>
+                                    {typeof navigator.share === 'function' && (
+                                        <Button onClick={handleShare} size="lg" className="gap-2 bg-blue-600 hover:bg-blue-700">
+                                            <Share2 className="h-4 w-4" />
+                                            Share results
+                                        </Button>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
                         {storeTeam ? (
-                            <Button onClick={() => navigate('/')} size="lg" className="min-w-[200px]">
+                            <Button onClick={() => navigate('/')} size="lg" className="min-w-[200px]" variant="ghost">
                                 Back to Dashboard
                             </Button>
                         ) : (
                             <div className="space-y-4">
                                 <p className="text-muted-foreground">Inspired by this team? Create your own!</p>
-                                <Button onClick={() => navigate('/')} size="lg" className="min-w-[250px] bg-gradient-to-r from-primary to-purple-600 border-none">
-                                    Join the Team Assemble now.
+                                <Button onClick={() => navigate('/')} size="lg" className="min-w-[250px] bg-gradient-to-r from-primary to-purple-600 border-none shadow-lg hover:shadow-primary/20 transition-all">
+                                    Join Team Assemble now.
                                 </Button>
                             </div>
                         )}
