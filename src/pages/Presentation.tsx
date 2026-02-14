@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { useSprintStore } from '../store/useSprintStore';
 import { useUIStore } from '../store/useUIStore';
 import { Button } from '../components/ui/button';
@@ -260,6 +261,8 @@ export default function Presentation() {
             await handleCapture();
         }
 
+        const shareUrl = window.location.href; // Use current URL with replay ID if present
+
         // Use Web Share API if available
         if (navigator.share && screenshotUrl) {
             try {
@@ -268,8 +271,9 @@ export default function Presentation() {
                 const file = new File([blob], 'team-assemble.png', { type: 'image/png' });
 
                 await navigator.share({
-                    title: 'Team Assemble Results',
+                    title: `Team ${capitalizeFirst(team?.name)} - Sprint Presentation`,
                     text: `Check out our new team rotation for ${team?.name}!`,
+                    url: shareUrl,
                     files: [file],
                 });
             } catch (error) {
@@ -277,6 +281,31 @@ export default function Presentation() {
             }
         }
     };
+
+    const handleShareUrl = async () => {
+        const shareUrl = window.location.href;
+        
+        try {
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(shareUrl);
+                setCopySuccess(true);
+                setTimeout(() => setCopySuccess(false), 2000);
+            }
+        } catch (error) {
+            console.error('Failed to copy URL:', error);
+        }
+    };
+
+    // Generate meta tags for social sharing
+    const baseUrl = window.location.origin + window.location.pathname.replace('/presentation', '');
+    const currentUrl = window.location.href;
+    const pageTitle = team ? `Team ${capitalizeFirst(team.name)} - Sprint Presentation` : 'Team Assemble - Sprint Presentation';
+    const pageDescription = team && roles.length > 0
+        ? `Check out the sprint roles for Team ${capitalizeFirst(team.name)}: ${roles.slice(0, 3).map(r => r.name).join(', ')}${roles.length > 3 ? '...' : ''}`
+        : 'Sprint role assignments and rotations for agile teams';
+    
+    // Use screenshot URL if available, otherwise fallback to default
+    const ogImageUrl = screenshotUrl || `${baseUrl}/social-preview.png`;
 
     if (isPublicLoading || step === 'loading') {
         return (
@@ -339,6 +368,25 @@ export default function Presentation() {
     const assignedMember = members.find(m => m.id === assignedMemberId);
 
     return (
+        <>
+            <Helmet>
+                <title>{pageTitle}</title>
+                <meta name="description" content={pageDescription} />
+                
+                {/* Open Graph / Facebook */}
+                <meta property="og:type" content="website" />
+                <meta property="og:url" content={currentUrl} />
+                <meta property="og:title" content={pageTitle} />
+                <meta property="og:description" content={pageDescription} />
+                <meta property="og:image" content={ogImageUrl} />
+                
+                {/* Twitter */}
+                <meta property="twitter:card" content="summary_large_image" />
+                <meta property="twitter:url" content={currentUrl} />
+                <meta property="twitter:title" content={pageTitle} />
+                <meta property="twitter:description" content={pageDescription} />
+                <meta property="twitter:image" content={ogImageUrl} />
+            </Helmet>
         <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
             {step === 'finished' ? (
                 <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full flex flex-col items-center justify-center">
@@ -425,6 +473,17 @@ export default function Presentation() {
                             )}
                         </div>
 
+                        {/* Share URL Button - Always visible when there's a replayId */}
+                        {replayId && (
+                            <div className="flex flex-col items-center gap-2">
+                                <p className="text-sm text-muted-foreground">Share this presentation URL:</p>
+                                <Button onClick={handleShareUrl} size="lg" variant="secondary" className="gap-2 min-w-[200px]">
+                                    {copySuccess ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
+                                    {copySuccess ? 'URL Copied!' : 'Copy Share Link'}
+                                </Button>
+                            </div>
+                        )}
+
                         {storeTeam ? (
                             <Button onClick={() => navigate('/')} size="lg" className="min-w-[200px]" variant="ghost">
                                 Back to Dashboard
@@ -503,5 +562,6 @@ export default function Presentation() {
                 </AnimatePresence>
             )}
         </div>
+        </>
     );
 }

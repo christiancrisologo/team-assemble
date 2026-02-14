@@ -10,6 +10,9 @@ A modern web application for managing team members, roles, and sprint planning w
 - **Sprint Planning**: Plan and organize sprints with role rotation capabilities
 - **Interactive Dashboard**: View team metrics and sprint overview at a glance
 - **Role Rotation**: Automatically rotate roles among team members with a roulette-style picker
+- **Social Sharing**: Share sprint presentations with rich previews on social media (Twitter, Slack, Discord)
+- **Screenshot Capture**: Download or copy presentation results as images
+- **Public Presentations**: Share presentation URLs that anyone can view
 - **Offline Support**: Seamlessly switch between online and offline modes with sample data
 - **Responsive Design**: Works great on desktop, tablet, and mobile devices
 - **Real-time Sync**: Data syncs with Supabase backend in real-time
@@ -25,6 +28,8 @@ A modern web application for managing team members, roles, and sprint planning w
 - **Drag & Drop**: @hello-pangea/dnd
 - **UI Components**: Lucide React Icons
 - **Animation**: Framer Motion
+- **Screenshot**: html2canvas
+- **Meta Tags**: react-helmet-async
 - **Utilities**: date-fns, clsx, tailwind-merge
 
 ## Getting Started
@@ -150,6 +155,17 @@ The sprint planning page features an interactive role selection roulette that:
 - Animates with confetti on selection
 - Can be used repeatedly for different member assignments
 
+### Social Sharing & Previews
+
+Share your team presentations with beautiful previews:
+- **Screenshot Capture**: Download presentation results as images
+- **Copy to Clipboard**: Quickly copy images for sharing
+- **Public URLs**: Share presentation links with `?replay=<sprint-id>` parameter
+- **Rich Previews**: Automatic Open Graph previews on Twitter, Slack, Discord, etc.
+- **No Login Required**: Public presentation links work without authentication
+
+For detailed setup and usage, see [SHARING.md](./SHARING.md).
+
 ### Offline Mode
 
 When the Supabase connection is unavailable, the app:
@@ -164,6 +180,12 @@ The app uses simple username/password authentication:
 - Teams are identified by unique names
 - Passwords are securely stored in Supabase
 - Sessions persist across browser refreshes
+
+## Documentation
+
+- [SHARING.md](./SHARING.md) - Social sharing setup and usage guide
+- [IMPLEMENTATION.md](./IMPLEMENTATION.md) - Technical implementation details
+- [supabase/schema.sql](./supabase/schema.sql) - Database schema
 
 ## Browser Support
 
