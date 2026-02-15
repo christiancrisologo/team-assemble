@@ -94,9 +94,46 @@ export default function Presentation() {
     const [currentRoleIndex, setCurrentRoleIndex] = useState(0);
     const [newAssignments, setNewAssignments] = useState<Record<string, string>>({});
     const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
+    const [avatarBlobs, setAvatarBlobs] = useState<Record<string, string>>({});
     const resultsRef = useRef<HTMLDivElement>(null);
+
+    // Derived URLs for sharing
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseProjectId = supabaseUrl?.split('.')[0].split('//')[1];
+    const edgeFunctionUrl = supabaseProjectId ? `https://${supabaseProjectId}.supabase.co/functions/v1/share-preview` : '';
+    const shareProxyUrl = replayId ? `${edgeFunctionUrl}?replay=${replayId}` : '';
+
+    // Pre-load avatars as local blobs to bypass CORS in html2canvas
+    useEffect(() => {
+        const loadAvatars = async () => {
+            const blobs: Record<string, string> = {};
+            const promises = members.map(async (m) => {
+                if (!m.avatar_url) return;
+                try {
+                    const response = await fetch(m.avatar_url, { mode: 'cors' });
+                    if (!response.ok) return;
+                    const blob = await response.blob();
+                    blobs[m.id] = URL.createObjectURL(blob);
+                } catch (e) {
+                    console.warn(`Could not pre-load avatar for ${m.name}, will fallback to direct URL`, e);
+                }
+            });
+            await Promise.all(promises);
+            setAvatarBlobs(blobs);
+        };
+
+        if (members.length > 0) {
+            loadAvatars();
+        }
+
+        return () => {
+            // Cleanup object URLs
+            Object.values(avatarBlobs).forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [members]);
 
     const fireConfetti = useCallback(() => {
         const duration = 3000;
@@ -212,23 +249,43 @@ export default function Presentation() {
     const handleCapture = async () => {
         if (!resultsRef.current) return;
         setIsCapturing(true);
+        setUploadingImage(true);
         try {
             // Wait a bit for animations to settle
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 800));
 
             const canvas = await html2canvas(resultsRef.current, {
                 useCORS: true,
-                scale: 2, // Better quality
-                backgroundColor: null, // Transparent if possible, but let's see
+                allowTaint: false,
+                scale: 2,
+                backgroundColor: '#ffffff', // Explicit background for contrast
                 logging: false,
             });
 
-            const url = canvas.toDataURL('image/png');
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Failed to create blob');
+
+            // 1. Local preview
+            const url = URL.createObjectURL(blob);
             setScreenshotUrl(url);
+
+            // 2. Upload to Supabase Storage if replaying
+            if (replayId) {
+                const fileName = `sprint-${replayId}.png`;
+                const { error: uploadError } = await supabase.storage
+                    .from('squad-previews')
+                    .upload(fileName, blob, {
+                        contentType: 'image/png',
+                        upsert: true
+                    });
+
+                if (uploadError) console.error('Upload error:', uploadError);
+            }
         } catch (error) {
             console.error('Failed to capture screenshot:', error);
         } finally {
             setIsCapturing(false);
+            setUploadingImage(false);
         }
     };
 
@@ -272,7 +329,7 @@ export default function Presentation() {
                 await navigator.share({
                     title: `Team ${capitalizeFirst(team?.name)} - Sprint Presentation`,
                     text: `Check out our new team rotation for ${team?.name}!`,
-                    url: shareUrl,
+                    url: shareProxyUrl || shareUrl,
                     files: [file],
                 });
             } catch (error) {
@@ -282,11 +339,11 @@ export default function Presentation() {
     };
 
     const handleShareUrl = async () => {
-        const shareUrl = window.location.href;
+        const finalUrl = shareProxyUrl || window.location.href;
 
         try {
             if (navigator.clipboard) {
-                await navigator.clipboard.writeText(shareUrl);
+                await navigator.clipboard.writeText(finalUrl);
                 setCopySuccess(true);
                 setTimeout(() => setCopySuccess(false), 2000);
             }
@@ -419,7 +476,10 @@ export default function Presentation() {
                                                             whileHover={{ boxShadow: "0 0 20px rgba(168, 85, 247, 0.4)" }}
                                                         >
                                                             {m.avatar_url ? (
-                                                                <img src={m.avatar_url} className="h-full w-full object-cover" />
+                                                                <img
+                                                                    src={avatarBlobs[m.id] || m.avatar_url}
+                                                                    className="h-full w-full object-cover"
+                                                                />
                                                             ) : (
                                                                 <div className="h-full w-full flex items-center justify-center font-bold text-xl text-muted-foreground">
                                                                     {m.name.charAt(0)}
@@ -452,18 +512,18 @@ export default function Presentation() {
                                 </Button>
                             ) : (
                                 <>
-                                    <Button onClick={handleDownload} size="lg" variant="outline" className="gap-2 border-primary/20">
+                                    <Button onClick={handleDownload} size="lg" variant="outline" className="gap-2 border-primary/20" disabled={uploadingImage}>
                                         <Download className="h-4 w-4" />
                                         Download Image
                                     </Button>
-                                    <Button onClick={handleCopy} size="lg" variant="outline" className="gap-2 border-primary/20 min-w-[140px]">
+                                    <Button onClick={handleCopy} size="lg" variant="outline" className="gap-2 border-primary/20 min-w-[140px]" disabled={uploadingImage}>
                                         {copySuccess ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                                         {copySuccess ? 'Copied!' : 'Copy Image'}
                                     </Button>
                                     {typeof navigator.share === 'function' && (
-                                        <Button onClick={handleShare} size="lg" className="gap-2 bg-blue-600 hover:bg-blue-700">
+                                        <Button onClick={handleShare} size="lg" className="gap-2 bg-blue-600 hover:bg-blue-700" disabled={uploadingImage}>
                                             <Share2 className="h-4 w-4" />
-                                            Share results
+                                            Share Results
                                         </Button>
                                     )}
                                 </>
@@ -473,8 +533,8 @@ export default function Presentation() {
                         {/* Share URL Button - Always visible when there's a replayId */}
                         {replayId && (
                             <div className="flex flex-col items-center gap-2">
-                                <p className="text-sm text-muted-foreground">Share this presentation URL:</p>
-                                <Button onClick={handleShareUrl} size="lg" variant="secondary" className="gap-2 min-w-[200px]">
+                                <p className="text-sm text-muted-foreground">{uploadingImage ? 'Syncing preview for social media...' : 'Share this presentation URL:'}</p>
+                                <Button onClick={handleShareUrl} size="lg" variant="secondary" className="gap-2 min-w-[200px]" disabled={uploadingImage}>
                                     {copySuccess ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
                                     {copySuccess ? 'URL Copied!' : 'Copy Share Link'}
                                 </Button>
@@ -535,7 +595,10 @@ export default function Presentation() {
                                         whileHover={{ scale: 1.1, boxShadow: "0 0 30px rgba(168, 85, 247, 0.6)" }}
                                     >
                                         {assignedMember.avatar_url ? (
-                                            <img src={assignedMember.avatar_url} className="h-full w-full object-cover" />
+                                            <img
+                                                src={avatarBlobs[assignedMember.id] || assignedMember.avatar_url}
+                                                className="h-full w-full object-cover"
+                                            />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center font-bold text-5xl text-muted-foreground">
                                                 {assignedMember.name.charAt(0)}
