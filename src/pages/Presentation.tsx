@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { useSprintStore } from '../store/useSprintStore';
 import { useUIStore } from '../store/useUIStore';
 import { Button } from '../components/ui/button';
@@ -284,7 +283,7 @@ export default function Presentation() {
 
     const handleShareUrl = async () => {
         const shareUrl = window.location.href;
-        
+
         try {
             if (navigator.clipboard) {
                 await navigator.clipboard.writeText(shareUrl);
@@ -303,7 +302,7 @@ export default function Presentation() {
     const pageDescription = team && roles.length > 0
         ? `Check out the sprint roles for Team ${capitalizeFirst(team.name)}: ${roles.slice(0, 3).map(r => r.name).join(', ')}${roles.length > 3 ? '...' : ''}`
         : 'Sprint role assignments and rotations for agile teams';
-    
+
     // Use screenshot URL if available, otherwise fallback to default
     const ogImageUrl = screenshotUrl || `${baseUrl}/social-preview.png`;
 
@@ -368,26 +367,24 @@ export default function Presentation() {
     const assignedMember = members.find(m => m.id === assignedMemberId);
 
     return (
-        <>
-            <Helmet>
-                <title>{pageTitle}</title>
-                <meta name="description" content={pageDescription} />
-                
-                {/* Open Graph / Facebook */}
-                <meta property="og:type" content="website" />
-                <meta property="og:url" content={currentUrl} />
-                <meta property="og:title" content={pageTitle} />
-                <meta property="og:description" content={pageDescription} />
-                <meta property="og:image" content={ogImageUrl} />
-                
-                {/* Twitter */}
-                <meta property="twitter:card" content="summary_large_image" />
-                <meta property="twitter:url" content={currentUrl} />
-                <meta property="twitter:title" content={pageTitle} />
-                <meta property="twitter:description" content={pageDescription} />
-                <meta property="twitter:image" content={ogImageUrl} />
-            </Helmet>
         <div className="flex flex-col items-center justify-center min-h-[100vh] space-y-6 p-4">
+            <title>{pageTitle}</title>
+            <meta name="description" content={pageDescription} />
+
+            {/* Open Graph / Facebook */}
+            <meta property="og:type" content="website" />
+            <meta property="og:url" content={currentUrl} />
+            <meta property="og:title" content={pageTitle} />
+            <meta property="og:description" content={pageDescription} />
+            <meta property="og:image" content={ogImageUrl} />
+
+            {/* Twitter */}
+            <meta property="twitter:card" content="summary_large_image" />
+            <meta property="twitter:url" content={currentUrl} />
+            <meta property="twitter:title" content={pageTitle} />
+            <meta property="twitter:description" content={pageDescription} />
+            <meta property="twitter:image" content={ogImageUrl} />
+
             {step === 'finished' ? (
                 <div className="text-center space-y-6 animate-in zoom-in duration-1000 w-full flex flex-col items-center justify-center">
                     <div ref={resultsRef} className="p-8 pb-12 w-full flex flex-col items-center justify-center bg-background rounded-3xl">
@@ -562,6 +559,5 @@ export default function Presentation() {
                 </AnimatePresence>
             )}
         </div>
-        </>
     );
 }
