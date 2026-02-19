@@ -218,7 +218,11 @@ export default function SprintPlanner() {
                 {step === 0 && (
                     <div className="flex gap-2">
                         {selectedIds.size > 0 && (
-                            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                            <Button
+                                variant="destructive"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => setIsDeleteDialogOpen(true)}
+                            >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Selected ({selectedIds.size})
                             </Button>
                         )}
@@ -394,7 +398,7 @@ export default function SprintPlanner() {
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-muted/50 text-muted-foreground font-medium border-b">
                                             <tr>
-                                                <th className="p-4 w-10">
+                                                <th className="p-4 w-8">
                                                     <input
                                                         type="checkbox"
                                                         className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
@@ -402,15 +406,15 @@ export default function SprintPlanner() {
                                                         onChange={toggleSelectAll}
                                                     />
                                                 </th>
-                                                <th className="p-4 w-10"></th>
+                                                <th className="p-4 w8"></th>
                                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-foreground transition-colors" onClick={() => handleSort('name')}>
                                                     <div className="flex items-center">Sprint Details <SortIcon column="name" /></div>
                                                 </th>
                                                 <th className="p-4">Assignments (Role → Member)</th>
-                                                <th className="p-4 whitespace-nowrap cursor-pointer hover:text-foreground transition-colors" onClick={() => handleSort('status')}>
+                                                <th className="p-4 w-22 whitespace-nowrap cursor-pointer hover:text-foreground transition-colors" onClick={() => handleSort('status')}>
                                                     <div className="flex items-center">Status <SortIcon column="status" /></div>
                                                 </th>
-                                                <th className="p-4 text-right">Actions</th>
+                                                <th className="p-4 w-18 text-right">Actions</th>
                                             </tr>
                                         </thead>
                                         <DragDropContext onDragEnd={onDragEnd}>
@@ -469,15 +473,15 @@ export default function SprintPlanner() {
                                                                                     return (
                                                                                         <div key={role.id} className="flex items-center gap-2 py-0.5">
                                                                                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${role.color.includes('bg-') ? role.color : 'bg-gray-500'}`} />
-                                                                                            <span className="text-muted-foreground text-xs font-medium w-20 truncate">{role.name}:</span>
-                                                                                            <span className="font-medium truncate">{member?.name || '-'}</span>
+                                                                                            <span className="text-muted-foreground text-xs font-medium w-20 truncate" title={role.name}>{role.name}:</span>
+                                                                                            <span className="font-medium truncate" title={member?.name || '-'}>{member?.name || '-'}</span>
                                                                                         </div>
                                                                                     )
                                                                                 })}
                                                                             </div>
                                                                         </td>
                                                                         <td className="p-4 align-top">
-                                                                            <span className={`px-2 py-1 rounded text-xs font-bold inline-block tracking-wide ${sprint.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                                                                            <span className={`px-2 py-1 rounded text-xs font-bold inline-block tracking-wide ${sprint.status === 'active' ? 'bg-green-500/10 text-green-600' : sprint.status === 'planning' ? 'bg-blue-400/10 text-gray-500' : 'bg-blue-400/10 text-blue-500'}`}>
                                                                                 {(sprint.status || 'completed').toUpperCase()}
                                                                             </span>
                                                                         </td>
@@ -522,7 +526,7 @@ export default function SprintPlanner() {
                             <Input type="number" value={sprintCount} onChange={e => setSprintCount(parseInt(e.target.value))} min={1} max={50} />
                         </div>
                         <div className="grid gap-2">
-                            <label>Duration (Weekdays)</label>
+                            <label>Days duration per Sprint</label>
                             <Input type="number" value={durationWeekdayCount} onChange={e => setDurationWeekdayCount(parseInt(e.target.value))} min={1} max={260} />
                             <p className="text-xs text-muted-foreground">Number of business days (Monday-Friday) per sprint. Weekends are excluded.</p>
                         </div>
