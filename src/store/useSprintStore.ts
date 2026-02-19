@@ -32,6 +32,7 @@ interface SprintStore {
     startSprint: (sprint: Omit<Sprint, 'team_id'>) => Promise<void>;
     setCurrentSprint: (id: string) => void;
     setSprints: (sprints: Omit<Sprint, 'team_id'>[]) => Promise<void>;
+    deleteSprints: (ids: string[]) => Promise<void>;
 }
 
 const STORAGE_KEY = 'lrn_sprint_offline_data';
@@ -353,6 +354,20 @@ export const useSprintStore = create<SprintStore>((set, get) => ({
 
         set({ sprints: sprintsWithTeam });
         localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: sprintsWithTeam }));
+    },
+
+    deleteSprints: async (ids) => {
+        const { isOffline, sprints, currentTeam } = get();
+        if (!currentTeam || ids.length === 0) return;
+
+        if (!isOffline) {
+            const { error } = await supabase.from('lrn_sprints').delete().in('id', ids);
+            if (error) console.error('Error deleting sprints:', error);
+        }
+
+        const updatedSprints = sprints.filter(s => !ids.includes(s.id));
+        set({ sprints: updatedSprints });
+        localStorage.setItem(`${STORAGE_KEY}_${currentTeam.id}`, JSON.stringify({ ...get(), sprints: updatedSprints }));
     },
 }));
 

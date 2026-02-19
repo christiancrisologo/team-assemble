@@ -1,17 +1,107 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSprintStore } from '../store/useSprintStore';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { addDays, format, parseISO } from 'date-fns';
-import { Save, Calendar, Pencil, Trash2, Users, Shield, Plus } from 'lucide-react';
+import { Save, Calendar, Pencil, Trash2, Users, Shield, Plus, GripVertical, ArrowUpDown, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { rotateSequential, rotateRandom } from '../utils/rotation';
+import { addWeekdays } from '../utils/weekday';
 import type { Sprint } from '../types';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { Dialog } from '../components/ui/dialog';
+
+type SortKey = 'name' | 'start_date' | 'status';
+type SortOrder = 'asc' | 'desc';
 
 export default function SprintPlanner() {
-    const { members, roles, sprints, addSprints, updateSprint, setSprints } = useSprintStore();
+    const { members, roles, sprints, addSprints, updateSprint, setSprints, deleteSprints } = useSprintStore();
     const [step, setStep] = useState(0); // 0 = List View, 1 = Config, 2 = Strategy, 3 = Review
     const [editingSprint, setEditingSprint] = useState<Omit<Sprint, 'team_id'> | null>(null);
+
+    // Selection State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Sorting State
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey, order: SortOrder }>({ key: 'start_date', order: 'asc' });
+
+    const sortedSprints = useMemo(() => {
+        const sorted = [...sprints].sort((a, b) => {
+            if (sortConfig.key === 'start_date') {
+                return sortConfig.order === 'asc'
+                    ? new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+                    : new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+            }
+            if (sortConfig.key === 'name') {
+                return sortConfig.order === 'asc'
+                    ? a.name.localeCompare(b.name)
+                    : b.name.localeCompare(a.name);
+            }
+            if (sortConfig.key === 'status') {
+                return sortConfig.order === 'asc'
+                    ? a.status.localeCompare(b.status)
+                    : b.status.localeCompare(a.status);
+            }
+            return 0;
+        });
+        return sorted;
+    }, [sprints, sortConfig]);
+
+    const handleSort = (key: SortKey) => {
+        setSortConfig(prev => ({
+            key,
+            order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === sprints.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(sprints.map(s => s.id)));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedIds(next);
+    };
+
+    // Modal State
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+    const handleBulkDelete = async () => {
+        const idsToDelete = Array.from(selectedIds);
+
+        // Update Supabase and State (Directly, no ripple)
+        await deleteSprints(idsToDelete);
+
+        setSelectedIds(new Set());
+        setIsDeleteDialogOpen(false);
+    };
+
+    const hasConflict = (current: Sprint) => {
+        return sprints.some(s =>
+            s.id !== current.id &&
+            s.start_date === current.start_date &&
+            s.end_date === current.end_date
+        );
+    };
+
+    const onDragEnd = async (result: DropResult) => {
+        if (!result.destination) return;
+        if (result.destination.index === result.source.index) return;
+
+        // If sorted by something other than date, DnD can be confusing but let's allow reordering.
+        const newItems = Array.from(sortedSprints);
+        const [reorderedItem] = newItems.splice(result.source.index, 1);
+        newItems.splice(result.destination.index, 0, reorderedItem);
+
+        // Update with NO recalculation of dates.
+        await setSprints(newItems);
+    };
 
     const saveEdit = async () => {
         if (editingSprint) {
@@ -27,22 +117,17 @@ export default function SprintPlanner() {
 
     const addSingleSprint = () => {
         const lastSprint = sortedSprints[sortedSprints.length - 1];
-        const durationDays = Math.round(durationWeeks * 7);
+        const durationWeekdays = durationWeekdayCount;
 
         let newStart = new Date();
         if (lastSprint) {
             newStart = addDays(new Date(lastSprint.end_date), 1);
         }
 
-        const newEnd = addDays(newStart, durationDays);
+        const newEnd = addWeekdays(newStart, durationWeekdays);
         const lastAssignments = lastSprint ? lastSprint.assignments : {};
-
-        // Always use sequential for 'Add Single Sprint' as requested, 
-        // or follow the currently selected strategy if that's preferred.
-        // Given the request "It should follow the sequential order...", I will force sequential here.
         const assignments = rotateSequential(members, roles, lastAssignments);
 
-        // Find max sprint number to avoid duplicates
         const sprintNumbers = sprints.map(s => {
             const match = s.name.match(/Sprint (\d+)/);
             return match ? parseInt(match[1]) : 0;
@@ -62,61 +147,10 @@ export default function SprintPlanner() {
         setEditingSprint(newSprint);
     };
 
-    const handleDelete = (id: string) => {
-        if (!confirm("Are you sure you want to delete this sprint? Subsequent sprints will be adjusted.")) return;
-
-        // 1. Sort current sprints to ensure order
-        const sorted = [...sprints].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
-
-        // 2. Find index of deleted sprint
-        const index = sorted.findIndex(s => s.id === id);
-        if (index === -1) return;
-
-        const deletedSprint = sorted[index];
-        const deletedStart = new Date(deletedSprint.start_date);
-
-        // 3. Remove the target sprint
-        sorted.splice(index, 1);
-
-        // 4. Ripple update
-        for (let i = index; i < sorted.length; i++) {
-            const current = sorted[i];
-
-            // Calculate duration of current sprint
-            const dStart = new Date(current.start_date);
-            const dEnd = new Date(current.end_date);
-            const durationMs = dEnd.getTime() - dStart.getTime();
-
-            let newStart: Date;
-            if (i === 0) {
-                // If it's now the first, move it to the deleted spot to fill gap
-                newStart = deletedStart;
-            } else {
-                const prev = sorted[i - 1];
-                newStart = addDays(new Date(prev.end_date), 1); // Start day after previous ends
-            }
-
-            const newEnd = new Date(newStart.getTime() + durationMs);
-            current.start_date = newStart.toISOString();
-            current.end_date = newEnd.toISOString();
-
-            // Adjust Roles (Sequential Ripple)
-            const prevSprint = i > 0 ? sorted[i - 1] : null;
-
-            if (prevSprint) {
-                current.assignments = rotateSequential(members, roles, prevSprint.assignments);
-            }
-            // If i=0, we leave assignments as is, as there's no previous sprint in the *current* sorted list to base rotation on.
-            // A more advanced solution might look at the last *completed* sprint from history.
-        }
-
-        setSprints(sorted);
-    };
-
-    // Step 1: Config
+    // Step 1: Config Initial values
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [sprintCount, setSprintCount] = useState(5);
-    const [durationWeeks, setDurationWeeks] = useState(2.5); // 2.5 weeks typical
+    const [durationWeekdayCount, setDurationWeekdayCount] = useState(10);
 
     // Step 2: Strategy
     const [strategy, setStrategy] = useState<'sequential' | 'random'>('sequential');
@@ -127,13 +161,9 @@ export default function SprintPlanner() {
     const generateDrafts = () => {
         let currentStart = new Date(startDate);
         const newSprints: Omit<Sprint, 'team_id'>[] = [];
-        const durationDays = Math.round(durationWeeks * 7);
-
-        // For simulation, we need a baseline of assignments.
-        // Use the last real sprint, or empty if none.
+        const durationWeekdays = durationWeekdayCount;
         let lastAssignments = sprints.length > 0 ? sprints[sprints.length - 1].assignments : {};
 
-        // Find base sprint number
         const existingNumbers = sprints.map(s => {
             const match = s.name.match(/Sprint (\d+)/);
             return match ? parseInt(match[1]) : 0;
@@ -142,15 +172,12 @@ export default function SprintPlanner() {
 
         for (let i = 0; i < sprintCount; i++) {
             const startStr = currentStart.toISOString();
-            const end = addDays(currentStart, durationDays);
+            const end = addWeekdays(currentStart, durationWeekdays);
             const endStr = end.toISOString();
 
-            let assignments = {};
-            if (strategy === 'sequential') {
-                assignments = rotateSequential(members, roles, lastAssignments);
-            } else {
-                assignments = rotateRandom(members, roles, lastAssignments);
-            }
+            let assignments = strategy === 'sequential'
+                ? rotateSequential(members, roles, lastAssignments)
+                : rotateRandom(members, roles, lastAssignments);
 
             newSprints.push({
                 id: crypto.randomUUID(),
@@ -162,10 +189,7 @@ export default function SprintPlanner() {
                 created_at: new Date().toISOString()
             });
 
-            // Update "lastAssignments" for next iteration
             lastAssignments = assignments;
-
-            // Advance date for next iteration
             currentStart = addDays(end, 1);
         }
 
@@ -175,12 +199,14 @@ export default function SprintPlanner() {
 
     const saveDrafts = () => {
         addSprints(draftSprints);
-        setStep(0); // Go back to list
+        setStep(0);
         setDraftSprints([]);
     };
 
-    // Sort sprints: By date only
-    const sortedSprints = [...sprints].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+    const SortIcon = ({ column }: { column: SortKey }) => {
+        if (sortConfig.key !== column) return <ArrowUpDown className="ml-2 h-3 w-3" />;
+        return sortConfig.order === 'asc' ? <ChevronUp className="ml-2 h-3 w-3" /> : <ChevronDown className="ml-2 h-3 w-3" />;
+    };
 
     return (
         <div className="space-y-6">
@@ -190,15 +216,53 @@ export default function SprintPlanner() {
                     <p className="text-muted-foreground">Bulk create and schedule your upcoming sprints.</p>
                 </div>
                 {step === 0 && (
-                    <Button onClick={() => setStep(1)}>
-                        <Calendar className="mr-2 h-4 w-4" /> Plan New Sprints
-                    </Button>
+                    <div className="flex gap-2">
+                        {selectedIds.size > 0 && (
+                            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Selected ({selectedIds.size})
+                            </Button>
+                        )}
+                        <Button onClick={() => {
+                            // Auto-set start date to day after last sprint ends
+                            if (sortedSprints.length > 0) {
+                                const lastSprint = sortedSprints[sortedSprints.length - 1];
+                                const nextStart = addDays(new Date(lastSprint.end_date), 1);
+                                setStartDate(nextStart.toISOString().split('T')[0]);
+                            }
+                            setStep(1);
+                        }}>
+                            <Calendar className="mr-2 h-4 w-4" /> Plan New Sprints
+                        </Button>
+                    </div>
                 )}
             </div>
 
+            <Dialog
+                isOpen={isDeleteDialogOpen}
+                onClose={() => setIsDeleteDialogOpen(false)}
+                title="Confirm Bulk Deletion"
+                description={`Are you sure you want to delete ${selectedIds.size} selected sprint(s)? This action cannot be undone.`}
+                footer={
+                    <>
+                        <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleBulkDelete}>
+                            Delete Sprints
+                        </Button>
+                    </>
+                }
+            >
+                <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm flex gap-3 border border-red-100">
+                    <Trash2 className="h-5 w-5 shrink-0" />
+                    <p>
+                        Selected sprints will be permanently removed from your schedule.
+                    </p>
+                </div>
+            </Dialog>
+
             {step === 0 && (
                 <div className="space-y-4">
-                    {/* Editor Modal / Overlay */}
                     {editingSprint && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl bg-white text-black border-2">
@@ -308,7 +372,7 @@ export default function SprintPlanner() {
                                 </div>
                             </CardContent>
                         </Card>
-                    ) : sortedSprints.length === 0 ? (
+                    ) : sprints.length === 0 ? (
                         <Card className="bg-muted/10 border-dashed">
                             <CardContent className="flex flex-col items-center justify-center p-12 space-y-4 text-center">
                                 <div className="p-4 rounded-full bg-background border">
@@ -330,57 +394,108 @@ export default function SprintPlanner() {
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-muted/50 text-muted-foreground font-medium border-b">
                                             <tr>
-                                                <th className="p-4 whitespace-nowrap">Sprint Details</th>
+                                                <th className="p-4 w-10">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                        checked={selectedIds.size === sprints.length && sprints.length > 0}
+                                                        onChange={toggleSelectAll}
+                                                    />
+                                                </th>
+                                                <th className="p-4 w-10"></th>
+                                                <th className="p-4 whitespace-nowrap cursor-pointer hover:text-foreground transition-colors" onClick={() => handleSort('name')}>
+                                                    <div className="flex items-center">Sprint Details <SortIcon column="name" /></div>
+                                                </th>
                                                 <th className="p-4">Assignments (Role → Member)</th>
-                                                <th className="p-4 whitespace-nowrap">Status</th>
+                                                <th className="p-4 whitespace-nowrap cursor-pointer hover:text-foreground transition-colors" onClick={() => handleSort('status')}>
+                                                    <div className="flex items-center">Status <SortIcon column="status" /></div>
+                                                </th>
                                                 <th className="p-4 text-right">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y">
-                                            {sortedSprints.map((sprint, idx) => (
-                                                <tr key={sprint.id || idx} className={`transition-colors ${sprint.status === 'active' ? 'bg-primary/5 hover:bg-primary/10 border-l-4 border-l-primary' : 'hover:bg-muted/5'}`}>
-                                                    <td className="p-4 align-top">
-                                                        <div className="font-bold text-base flex items-center gap-2">
-                                                            {sprint.name}
-                                                            {sprint.status === 'active' && <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">CURRENT</span>}
-                                                        </div>
-                                                        <div className="text-muted-foreground text-xs mt-1">
-                                                            {format(parseISO(sprint.start_date), 'MMM d, yyyy')} - {format(parseISO(sprint.end_date), 'MMM d, yyyy')}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 align-top">
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                                                            {roles.map(role => {
-                                                                const memberId = sprint.assignments[role.id];
-                                                                const member = members.find(m => m.id === memberId);
-                                                                return (
-                                                                    <div key={role.id} className="flex items-center gap-2 py-0.5">
-                                                                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${role.color.includes('bg-') ? role.color : 'bg-gray-500'}`} />
-                                                                        <span className="text-muted-foreground text-xs font-medium w-20 truncate">{role.name}:</span>
-                                                                        <span className="font-medium truncate">{member?.name || '-'}</span>
-                                                                    </div>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 align-top">
-                                                        <span className={`px-2 py-1 rounded text-xs font-bold inline-block tracking-wide ${sprint.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
-                                                            {(sprint.status || 'completed').toUpperCase()}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 align-top text-right space-x-1">
-                                                        <Button size="sm" variant="ghost" onClick={() => setEditingSprint(sprint)} title="Edit Sprint">
-                                                            <Pencil className="h-4 w-4" />
-                                                            <span className="sr-only">Edit</span>
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleDelete(sprint.id)} title="Delete Sprint">
-                                                            <Trash2 className="h-4 w-4" />
-                                                            <span className="sr-only">Delete</span>
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
+                                        <DragDropContext onDragEnd={onDragEnd}>
+                                            <Droppable droppableId="sprints">
+                                                {(provided) => (
+                                                    <tbody
+                                                        {...provided.droppableProps}
+                                                        ref={provided.innerRef}
+                                                        className="divide-y"
+                                                    >
+                                                        {sortedSprints.map((sprint, idx) => (
+                                                            <Draggable key={sprint.id} draggableId={sprint.id} index={idx}>
+                                                                {(provided, snapshot) => (
+                                                                    <tr
+                                                                        ref={provided.innerRef}
+                                                                        {...provided.draggableProps}
+                                                                        className={`transition-colors ${snapshot.isDragging ? 'bg-accent shadow-lg ring-1 ring-primary/20' : sprint.status === 'active' ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/5'} ${sprint.status === 'active' ? 'border-l-4 border-l-primary' : ''}`}
+                                                                    >
+                                                                        <td className="p-4">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                                                checked={selectedIds.has(sprint.id)}
+                                                                                onChange={() => toggleSelect(sprint.id)}
+                                                                            />
+                                                                        </td>
+                                                                        <td className="p-4">
+                                                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-primary transition-colors">
+                                                                                <GripVertical className="h-5 w-5" />
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-4 align-top">
+                                                                            <div className="font-bold text-base flex items-center gap-2">
+                                                                                {sprint.name}
+                                                                                {sprint.status === 'active' && <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">CURRENT</span>}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 mt-1">
+                                                                                <div className="text-muted-foreground text-xs">
+                                                                                    {format(parseISO(sprint.start_date), 'MMM d, yyyy')} - {format(parseISO(sprint.end_date), 'MMM d, yyyy')}
+                                                                                </div>
+                                                                                {hasConflict(sprint) && (
+                                                                                    <div className="group relative">
+                                                                                        <AlertTriangle className="h-4 w-4 text-amber-500 cursor-help" />
+                                                                                        <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block z-50 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl">
+                                                                                            There's a duplicate sprint with these dates
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-4 align-top">
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+                                                                                {roles.map(role => {
+                                                                                    const memberId = sprint.assignments[role.id];
+                                                                                    const member = members.find(m => m.id === memberId);
+                                                                                    return (
+                                                                                        <div key={role.id} className="flex items-center gap-2 py-0.5">
+                                                                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${role.color.includes('bg-') ? role.color : 'bg-gray-500'}`} />
+                                                                                            <span className="text-muted-foreground text-xs font-medium w-20 truncate">{role.name}:</span>
+                                                                                            <span className="font-medium truncate">{member?.name || '-'}</span>
+                                                                                        </div>
+                                                                                    )
+                                                                                })}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-4 align-top">
+                                                                            <span className={`px-2 py-1 rounded text-xs font-bold inline-block tracking-wide ${sprint.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                                                                                {(sprint.status || 'completed').toUpperCase()}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="p-4 align-top text-right">
+                                                                            <Button size="sm" variant="ghost" onClick={() => setEditingSprint(sprint)} title="Edit Sprint">
+                                                                                <Pencil className="h-4 w-4" />
+                                                                                <span className="sr-only">Edit</span>
+                                                                            </Button>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </Draggable>
+                                                        ))}
+                                                        {provided.placeholder}
+                                                    </tbody>
+                                                )}
+                                            </Droppable>
+                                        </DragDropContext>
                                     </table>
                                 </div>
                                 <div className="p-4 border-t border-dashed bg-muted/5 flex justify-center">
@@ -407,8 +522,9 @@ export default function SprintPlanner() {
                             <Input type="number" value={sprintCount} onChange={e => setSprintCount(parseInt(e.target.value))} min={1} max={50} />
                         </div>
                         <div className="grid gap-2">
-                            <label>Duration (Weeks)</label>
-                            <Input type="number" value={durationWeeks} onChange={e => setDurationWeeks(parseFloat(e.target.value))} step={0.5} />
+                            <label>Duration (Weekdays)</label>
+                            <Input type="number" value={durationWeekdayCount} onChange={e => setDurationWeekdayCount(parseInt(e.target.value))} min={1} max={260} />
+                            <p className="text-xs text-muted-foreground">Number of business days (Monday-Friday) per sprint. Weekends are excluded.</p>
                         </div>
                         <div className="flex gap-2">
                             <Button variant="ghost" onClick={() => setStep(0)}>Cancel</Button>
@@ -487,3 +603,4 @@ export default function SprintPlanner() {
         </div>
     );
 }
+
