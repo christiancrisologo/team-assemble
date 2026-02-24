@@ -39,24 +39,27 @@ jobs:
 
       - name: Verify environment variables
         run: |
+          echo "Checking for secrets..."
           if [ -z "$VITE_SUPABASE_URL" ]; then
             echo "ERROR: VITE_SUPABASE_URL is not set"
+            echo "Available secrets: ${{ toJSON(secrets) }}"
+            echo "Available vars: ${{ toJSON(vars) }}"
             exit 1
           fi
           if [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
             echo "ERROR: VITE_SUPABASE_ANON_KEY is not set"
             exit 1
           fi
-          echo "Environment variables are set correctly"
+          echo "✓ Environment variables are set correctly"
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
