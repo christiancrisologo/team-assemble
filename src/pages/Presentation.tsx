@@ -338,20 +338,6 @@ export default function Presentation() {
         }
     };
 
-    const handleShareUrl = async () => {
-        const finalUrl = shareProxyUrl || window.location.href;
-
-        try {
-            if (navigator.clipboard) {
-                await navigator.clipboard.writeText(finalUrl);
-                setCopySuccess(true);
-                setTimeout(() => setCopySuccess(false), 2000);
-            }
-        } catch (error) {
-            console.error('Failed to copy URL:', error);
-        }
-    };
-
     // Generate meta tags for social sharing
     const baseUrl = window.location.origin + window.location.pathname.replace('/presentation', '');
     const currentUrl = window.location.href;
