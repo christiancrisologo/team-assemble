@@ -533,11 +533,7 @@ export default function Presentation() {
                         {/* Share URL Button - Always visible when there's a replayId */}
                         {replayId && (
                             <div className="flex flex-col items-center gap-2">
-                                <p className="text-sm text-muted-foreground">{uploadingImage ? 'Syncing preview for social media...' : 'Share this presentation URL:'}</p>
-                                <Button onClick={handleShareUrl} size="lg" variant="secondary" className="gap-2 min-w-[200px]" disabled={uploadingImage}>
-                                    {copySuccess ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
-                                    {copySuccess ? 'URL Copied!' : 'Copy Share Link'}
-                                </Button>
+                                <p className="text-sm text-muted-foreground">{uploadingImage ? 'Syncing preview for social media...' : ''}</p>
                             </div>
                         )}
 
